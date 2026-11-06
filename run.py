@@ -152,7 +152,7 @@ def write_results(data: dict, out: Path) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("scenario", nargs="?", default="configs/scenarios/coast_landing.json")
+    ap.add_argument("scenario", nargs="?", default="missions/powered_landing/configs/scenarios/coast_landing.json")
     ap.add_argument("--out", default="web/data/results.json")
     ap.add_argument("--serve", action="store_true", help="open the viewer on the stored results (solves first only if there are none)")
     ap.add_argument("--solve", action="store_true", help="with --serve: re-solve before serving")

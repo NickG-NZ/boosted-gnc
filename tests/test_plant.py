@@ -11,7 +11,7 @@ from landing.plant import make_plant
 from landing.sim import truth_from_case
 from landing.vehicle import Scenario
 
-CFG = Path(__file__).resolve().parents[1] / "configs/scenarios/coast_landing.json"
+CFG = Path(__file__).resolve().parents[1] / "missions/powered_landing/configs/scenarios/coast_landing.json"
 CHANNELS = {"t", "r", "v", "m", "b", "w", "g", "thrust", "wind"}
 
 

@@ -16,7 +16,7 @@ from landing.mpc import NU, NX, continuous_model, discretize
 from landing.sim import project_thrust, simulate, truth_from_case
 from landing.vehicle import Scenario
 
-CFG = Path(__file__).resolve().parents[1] / "configs/scenarios/spec_test_case.json"
+CFG = Path(__file__).resolve().parents[1] / "missions/powered_landing/configs/scenarios/spec_test_case.json"
 
 
 @pytest.fixture(scope="module")

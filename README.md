@@ -63,8 +63,8 @@ Vehicles and scenarios are plain JSON.
 
 | Path | Contents |
 |---|---|
-| `configs/rockets/` | Mass, Isp, max thrust, throttle limits, gimbal limits, reference area, C_D, geometry |
-| `configs/scenarios/` | Initial state, environment, constraints, solver settings, and the list of sim cases |
+| `missions/powered_landing/configs/rockets/` | Mass, Isp, max thrust, throttle limits, gimbal limits, reference area, C_D, geometry |
+| `missions/powered_landing/configs/scenarios/` | Initial state, environment, constraints, solver settings, and the list of sim cases |
 
 Each sim case chooses a guidance law, a controller and the truth conditions it flies against:
 
