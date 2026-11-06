@@ -5,7 +5,7 @@
 <h1 align="center">boosted-gnc</h1>
 
 <p align="center">
-  Guidance, navigation and control simulation for rockets and aircraft.
+  Convex optimization driven guidance, navigation and control for landing rockets and aircraft.
 </p>
 
 ---
@@ -17,7 +17,7 @@ boosted-gnc is two things:
 1. **A simulation environment.** A fast, modular flight simulator written in Rust, covering vehicle dynamics,
    environment models and telemetry.
 2. **A library of modern flight control.** Minimal, readable implementations of state-of-the-art
-   optimization-based guidance and control for aircraft and rocket landing.
+   optimization-based guidance and control for aircraft and rocket booster landing.
 
 The goal is to make advanced GNC methods easy to read, run and compare against a realistic model of the world.
 
