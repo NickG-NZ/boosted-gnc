@@ -1,9 +1,10 @@
 # Missions
 
-One folder per scenario family. A mission holds its vehicle and scenario configs (and later its own
-run script and sim-loop wiring); the GNC algorithms (`landing/`) and the Rust sim engine (`sim/`) are
-shared.
+One folder per mission, each with a `scenario.json` (initial state, environment, constraints, solver
+settings, sim cases). Vehicles are shared from `vehicles/`; the GNC code (`landing/`) and the Rust sim
+engine (`sim/`) are shared by all missions.
 
-| Mission | Contents |
+| Mission | |
 |---|---|
-| `powered_landing/` | Booster engine-off fall and hoverslam landing: `configs/rockets/`, `configs/scenarios/` |
+| `coast_landing/` | Engine-off fall from 4 km, then hoverslam (default for `run.py`) |
+| `spec_test_case/` | Spec section 7 powered-descent test case (acceptance tests) |

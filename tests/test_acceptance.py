@@ -16,7 +16,9 @@ from landing.mpc import NU, NX, continuous_model, discretize
 from landing.sim import project_thrust, simulate, truth_from_case
 from landing.vehicle import Scenario
 
-CFG = Path(__file__).resolve().parents[1] / "missions/powered_landing/configs/scenarios/spec_test_case.json"
+MISSIONS = Path(__file__).resolve().parents[1] / "missions"
+CFG = MISSIONS / "spec_test_case/scenario.json"
+COAST_CFG = MISSIONS / "coast_landing/scenario.json"
 
 
 @pytest.fixture(scope="module")
@@ -126,7 +128,7 @@ def test_closed_loop_replan_handles_perturbation(sc, plan_s):
 
 
 def test_coast_ignition_scvx_lands():
-    sc2 = Scenario.from_json(CFG.parent / "coast_landing.json")
+    sc2 = Scenario.from_json(COAST_CFG)
     g = SCvxGuidance(sc2)
     plan = plan_with_ignition(sc2, g)
     assert 0 < plan.info["t_ignition"] < plan.info["t_latest_ignition"]
@@ -143,7 +145,7 @@ def test_coast_ignition_scvx_lands():
 
 @pytest.fixture(scope="module")
 def coast_sc():
-    return Scenario.from_json(CFG.parent / "coast_landing.json")
+    return Scenario.from_json(COAST_CFG)
 
 
 @pytest.fixture(scope="module")

@@ -1,6 +1,6 @@
 {
   "name": "Spec section 7 test case",
-  "rocket": "../rockets/booster.json",
+  "rocket": "../../vehicles/booster.json",
 
   "initial_state": {
     "m0": 26000.0,

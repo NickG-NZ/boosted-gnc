@@ -1,6 +1,6 @@
 {
   "name": "Engine-off fall from 4 km, then hoverslam",
-  "rocket": "../rockets/booster.json",
+  "rocket": "../../vehicles/booster.json",
 
   "initial_state": {
     "m0": 26500.0,

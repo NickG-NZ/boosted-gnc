@@ -38,7 +38,7 @@ def solve(scenario_path: str | Path, only: list[str] | None = None, existing: di
     viewer data. With `only` and `existing`, the new runs are merged into the existing results.
     Each sim record carries the plan it flew, so a partial re-run stays self-consistent.
     `progress(stage, done, total, label)` is called before each plan / sim.
-    With `artifacts`, each sim's plant telemetry is written to artifacts/<scenario>/<case>.telemetry.json."""
+    With `artifacts`, each sim's plant telemetry is written to artifacts/<mission>/<case>.telemetry.json."""
     sc = Scenario.from_json(scenario_path)
     rk = sc.rocket
     print(f"Scenario: {sc.name} | rocket: {rk.name}")
@@ -99,7 +99,7 @@ def solve(scenario_path: str | Path, only: list[str] | None = None, existing: di
             guidance=guidance[case["plan"]],
             replan_hz=case.get("replan_hz", 0.0),
             controller=case.get("controller", "cascade"),
-            telemetry_path=artifacts / Path(scenario_path).stem / f"{slug(case['name'])}.telemetry.json"
+            telemetry_path=artifacts / Path(scenario_path).parent.name / f"{slug(case['name'])}.telemetry.json"
             if artifacts else None,
         )
         res.metrics["wall_time_s"] = time.perf_counter() - t0
@@ -152,7 +152,7 @@ def write_results(data: dict, out: Path) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("scenario", nargs="?", default="missions/powered_landing/configs/scenarios/coast_landing.json")
+    ap.add_argument("scenario", nargs="?", default="missions/coast_landing/scenario.json")
     ap.add_argument("--out", default="web/data/results.json")
     ap.add_argument("--serve", action="store_true", help="open the viewer on the stored results (solves first only if there are none)")
     ap.add_argument("--solve", action="store_true", help="with --serve: re-solve before serving")

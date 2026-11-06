@@ -50,12 +50,12 @@ new results.
 ```bash
 uv run python run.py                          # solve and simulate every case
 uv run python run.py --only "CASE NAME"       # re-run a single case
-uv run python run.py path/to/scenario.json    # use a different scenario
+uv run python run.py missions/spec_test_case/scenario.json    # use a different mission
 uv run pytest                                 # run the test suite
 ```
 
 Results are written to `web/data/results.json`, and each run's truth telemetry to
-`artifacts/<scenario>/<case>.telemetry.json` (`--artifacts ''` to skip).
+`artifacts/<mission>/<case>.telemetry.json` (`--artifacts ''` to skip).
 
 ## Configuration
 
@@ -63,8 +63,8 @@ Vehicles and scenarios are plain JSON.
 
 | Path | Contents |
 |---|---|
-| `missions/powered_landing/configs/rockets/` | Mass, Isp, max thrust, throttle limits, gimbal limits, reference area, C_D, geometry |
-| `missions/powered_landing/configs/scenarios/` | Initial state, environment, constraints, solver settings, and the list of sim cases |
+| `vehicles/` | Mass, Isp, max thrust, throttle limits, gimbal limits, reference area, C_D, geometry |
+| `missions/<name>/scenario.json` | Initial state, environment, constraints, solver settings, and the list of sim cases |
 
 Each sim case chooses a guidance law, a controller and the truth conditions it flies against:
 
