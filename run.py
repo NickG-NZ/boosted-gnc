@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import http.server
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -32,11 +33,12 @@ warnings.filterwarnings("ignore", message="Solution may be inaccurate")
 
 
 def solve(scenario_path: str | Path, only: list[str] | None = None, existing: dict | None = None,
-          verbose: bool = True, progress=None) -> dict:
+          verbose: bool = True, progress=None, artifacts: Path | None = None) -> dict:
     """Plan and simulate the scenario's cases (all, or only those named in `only`) and return the
     viewer data. With `only` and `existing`, the new runs are merged into the existing results.
     Each sim record carries the plan it flew, so a partial re-run stays self-consistent.
-    `progress(stage, done, total, label)` is called before each plan / sim."""
+    `progress(stage, done, total, label)` is called before each plan / sim.
+    With `artifacts`, each sim's plant telemetry is written to artifacts/<scenario>/<case>.telemetry.json."""
     sc = Scenario.from_json(scenario_path)
     rk = sc.rocket
     print(f"Scenario: {sc.name} | rocket: {rk.name}")
@@ -97,6 +99,8 @@ def solve(scenario_path: str | Path, only: list[str] | None = None, existing: di
             guidance=guidance[case["plan"]],
             replan_hz=case.get("replan_hz", 0.0),
             controller=case.get("controller", "cascade"),
+            telemetry_path=artifacts / Path(scenario_path).stem / f"{slug(case['name'])}.telemetry.json"
+            if artifacts else None,
         )
         res.metrics["wall_time_s"] = time.perf_counter() - t0
         res.metrics["plan"] = case["plan"]
@@ -135,6 +139,10 @@ def solve(scenario_path: str | Path, only: list[str] | None = None, existing: di
     }
 
 
+def slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
 def write_results(data: dict, out: Path) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".tmp")
@@ -149,6 +157,7 @@ def main() -> None:
     ap.add_argument("--serve", action="store_true", help="open the viewer on the stored results (solves first only if there are none)")
     ap.add_argument("--solve", action="store_true", help="with --serve: re-solve before serving")
     ap.add_argument("--only", action="append", metavar="CASE", help="solve only this case (repeatable); merged into existing results")
+    ap.add_argument("--artifacts", default="artifacts", help="directory for per-run telemetry artifacts ('' = none)")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--progress-json", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("-q", "--quiet", action="store_true")
@@ -161,7 +170,8 @@ def main() -> None:
         if args.progress_json:
             def progress(stage, done, total, label):
                 print("@@progress " + json.dumps({"stage": stage, "done": done, "total": total, "label": label}), flush=True)
-        data = solve(args.scenario, only=args.only, existing=existing, verbose=not args.quiet, progress=progress)
+        data = solve(args.scenario, only=args.only, existing=existing, verbose=not args.quiet, progress=progress,
+                     artifacts=Path(args.artifacts) if args.artifacts else None)
         write_results(data, out)
         print(f"\nWrote {out}")
     if args.serve:

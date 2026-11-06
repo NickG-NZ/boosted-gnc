@@ -3,6 +3,7 @@ name = "flight-control"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
+    "boosted-sim",
     "clarabel>=0.11.1",
     "cvxpy>=1.9.3",
     "numpy>=2.5.4",
@@ -16,6 +17,10 @@ dev = [
     "pytest>=9.2.0",
     "ruff>=0.17.4",
 ]
+
+[tool.uv.sources]
+# Rust sim engine (sim/), built with maturin; needs cargo on PATH. Rebuilt when Rust sources change.
+boosted-sim = { path = "sim" }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

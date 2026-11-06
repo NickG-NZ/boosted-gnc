@@ -34,3 +34,7 @@ __pycache__/
 
 # Web viewer tooling
 node_modules/
+
+# Run outputs (telemetry artifacts etc.)
+/artifacts/
+/sim/target/

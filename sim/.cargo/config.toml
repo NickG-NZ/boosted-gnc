@@ -1,0 +1,7 @@
+# Python extension modules resolve libpython symbols at load time; let plain `cargo build` /
+# `cargo test` link the cdylib on macOS too (maturin passes the same flags itself).
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]

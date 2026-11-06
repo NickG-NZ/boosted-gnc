@@ -1,0 +1,18 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "boosted-sim"
+version = "0.1.0"
+description = "Rust truth-model simulator (Python bindings)"
+requires-python = ">=3.13"
+
+[tool.maturin]
+manifest-path = "crates/sim-py/Cargo.toml"
+module-name = "boosted_sim"
+features = ["pyo3/extension-module"]
+
+[tool.uv]
+# rebuild the extension whenever Rust sources change
+cache-keys = [{ file = "Cargo.toml" }, { file = "Cargo.lock" }, { file = "crates/**/*.rs" }, { file = "crates/**/Cargo.toml" }]

@@ -58,6 +58,18 @@ class WindModel:
             return cls(**{**cfg, "mean": tuple(float(x) for x in cfg.get("mean", (0, 0, 0)))})
         return cls(mean=tuple(float(x) for x in cfg))
 
+    def gust_table(self) -> tuple[np.ndarray, np.ndarray] | None:
+        """Gust profile as (altitudes, velocities) covering [0, H_MAX], or None without gusts.
+        Interpolating it with end clamping reproduces `at` exactly (used by the Rust plant)."""
+        if not self.gust_sigma:
+            return None
+        keep = self._h <= H_MAX
+        h, gust = self._h[keep], self._gust[keep]
+        if h[-1] < H_MAX:
+            top = np.array([[np.interp(H_MAX, self._h, self._gust[:, i]) for i in range(3)]])
+            h, gust = np.r_[h, H_MAX], np.vstack([gust, top])
+        return h, gust
+
     def at(self, h: float) -> np.ndarray:
         """Wind velocity (m/s, guidance frame [up, x, y]) at altitude h (m)."""
         mean = np.asarray(self.mean, float)

@@ -1,4 +1,8 @@
-"""Pitch/yaw attitude dynamics with a gimbaled engine (thrust vector control).
+"""Pitch/yaw attitude control with a gimbaled engine (thrust vector control).
+
+The dynamics themselves (gimbal actuator, torques, rotation) are simulated by the Rust plant
+(sim/crates/sim-vehicle); this module is the flight-software side: the attitude controller and
+the pointing reference model.
 
 State: body axis b (unit), body angular velocity w (perpendicular to b), gimbal deflection g.
 The gimbal is stored as a vector perpendicular to b with |g| = sin(delta): the thrust direction is
@@ -82,7 +86,7 @@ class AttitudeModel:
         self.dg_max = math.radians(p.gimbal_rate_deg_s)  # per second (small-angle: d|g| ~ d delta)
         self.w_max = math.radians(p.body_rate_max_deg_s)
         self.fin_alpha = math.radians(p.fin_alpha_max_deg_s2)
-        self.last: dict = {}  # intermediate signals of the last powered step (for probes/plots)
+        self.last: dict = {}  # controller signals of the last command (for probes/plots)
 
     def alpha_avail(self, thrust: float) -> float:
         """Max angular acceleration (rad/s^2): gimbal torque with the engine on, else grid fins."""
@@ -106,42 +110,22 @@ class AttitudeModel:
         w_des = _clip_norm(w_des, self.w_max)
         return self.p.k_omega * (w_des - st.w)
 
-    def step(self, st: AttitudeState, b_des: np.ndarray, thrust: float, dt: float,
-             w_ff: np.ndarray | None = None, a_ff: np.ndarray | None = None) -> AttitudeState:
-        """Advance one step. `thrust` is the engine thrust magnitude (0 = engine off);
-        `w_ff` / `a_ff` optional feedforward body rate (rad/s) and angular accel (rad/s^2)."""
+    def command(self, st: AttitudeState, b_des: np.ndarray, thrust: float,
+                w_ff: np.ndarray | None = None, a_ff: np.ndarray | None = None
+                ) -> tuple[np.ndarray | None, np.ndarray | None]:
+        """Actuator commands that steer the body axis toward `b_des`: `(gimbal, None)` with the
+        engine lit (`thrust` > 0, N), else `(None, fin angular accel)`. `w_ff` / `a_ff` optional
+        feedforward body rate (rad/s) and angular accel (rad/s^2). The plant applies the limits."""
         p, b = self.p, st.b
         alpha_des = self._alpha_cmd(st, b_des, w_ff, thrust)
         if a_ff is not None:
             alpha_des = alpha_des + _perp(a_ff, b)
+        self.last = {"alpha_cmd": alpha_des}
         if thrust > 0:
             # tau = I alpha = -arm T (b x g)  ->  b x g = -I alpha / (arm T)  ->  g = (b x g) x b
             c = -p.inertia * alpha_des / (p.arm * thrust)
-            g_cmd = _clip_norm(_perp(np.cross(c, b), b), self.g_max)
-            out = self.step_gimbal(st, g_cmd, thrust, dt)
-            self.last["alpha_cmd"] = alpha_des
-            return out
-        g = np.zeros(3)  # nozzle neutral with the engine off
-        alpha = _clip_norm(alpha_des, self.fin_alpha)  # grid fins
-        return self._propagate(st, alpha, g, dt)
-
-    def step_gimbal(self, st: AttitudeState, g_cmd: np.ndarray, thrust: float, dt: float) -> AttitudeState:
-        """Advance one step with a direct gimbal command (angle and slew-rate limited)."""
-        p, b = self.p, st.b
-        g_cmd = _clip_norm(_perp(g_cmd, b), self.g_max)
-        g = _perp(st.g, b)
-        g = g + _clip_norm(g_cmd - g, self.dg_max * dt)  # gimbal slew-rate limit
-        g = _clip_norm(g, self.g_max)
-        alpha = -p.arm * thrust * np.cross(b, g) / p.inertia
-        self.last = {"g_cmd": g_cmd, "g": g, "torque": p.inertia * alpha, "alpha": alpha}
-        return self._propagate(st, alpha, g, dt)
-
-    @staticmethod
-    def _propagate(st: AttitudeState, alpha: np.ndarray, g: np.ndarray, dt: float) -> AttitudeState:
-        b = st.b
-        w = _perp(st.w + alpha * dt, b)
-        b_new = _rotate(b, w, dt)
-        return AttitudeState(b=b_new, w=_perp(w, b_new), g=_perp(g, b_new))
+            return _clip_norm(_perp(np.cross(c, b), b), self.g_max), None
+        return None, alpha_des  # engine off: nozzle neutral, grid fins steer
 
 
 class ReferenceModel:

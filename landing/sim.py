@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -17,8 +18,9 @@ import numpy as np
 from .attitude import AttitudeModel, AttitudeParams, AttitudeState, ReferenceModel
 from .dynamics import TruthModel
 from .mpc import TrackingMPC, embed_gimbal
+from .plant import StepInfo, make_plant
 from .trajectory import Trajectory
-from .vehicle import E1, Scenario, rotate_toward
+from .vehicle import E1, Scenario
 from .wind import WindModel
 
 
@@ -27,6 +29,11 @@ def max_rate(t: np.ndarray, att: np.ndarray) -> float:
     dt = np.diff(t)
     ok = dt > 1e-6
     return float(np.max(np.arccos(dots[ok]) / dt[ok])) if ok.any() else 0.0
+
+
+def _actuator_signals(info: StepInfo, att: AttitudeState) -> dict[str, Any]:
+    """Plant-side signals of a step, for probes."""
+    return {"g_cmd": info.g_cmd, "g": att.g, "torque": info.torque, "alpha": info.alpha}
 
 
 def project_thrust(T: np.ndarray, t_min: float, t_max: float, theta_max: float) -> np.ndarray:
@@ -94,6 +101,7 @@ def simulate(
     freeze_tgo: float = 2.0,
     probe=None,
     controller: str = "cascade",
+    telemetry_path: str | Path | None = None,
 ) -> SimResult:
     """Fly `plan` through `truth`.
 
@@ -102,7 +110,8 @@ def simulate(
     ignition and then at that rate until t_go < freeze_tgo, then hold the last plan.
     `probe(signals: dict)` is called every powered control step with every intermediate signal.
     `controller`: "cascade" (PD tracker -> reference model -> attitude loop -> gimbal) or
-    "mpc" (attitude-aware tracking MPC commanding throttle and gimbal directly, landing/mpc.py)."""
+    "mpc" (attitude-aware tracking MPC commanding throttle and gimbal directly, landing/mpc.py).
+    `telemetry_path`: write the plant's telemetry artifact there."""
     rk = sc.rocket
     cfg = {"omega_n": 1.0, "zeta": 0.7, "dt": 0.01, **sc.tracker}
     dt = cfg["dt"]
@@ -129,15 +138,14 @@ def simulate(
         n = np.linalg.norm(vr)
         return -vr / n if n > 1e-6 else E1.copy()
 
-    s = np.concatenate([sc.r0, sc.v0, [sc.m0]])
     b0 = airflow_axis(sc.r0, sc.v0) if sc.att0 is None else sc.att0 / np.linalg.norm(sc.att0)
-    ast = AttitudeState(b=b0)
+    # the truth model the flight software below flies (Rust sim engine, see plant.py)
+    plant = make_plant(sc, truth, b0)
     # smooth pointing reference (bounded rate and angular acceleration) for the attitude loop
     ref = ReferenceModel(b0, omega=cfg.get("ref_omega", 1.5), rate_max=math.radians(cfg.get("cmd_rate_deg_s", 8.0)))
     ref_brake = cfg.get("ref_accel_frac", 0.5)  # fraction of gimbal authority the reference may use
     lat_fade = float(cfg.get("lateral_fade_s", 0.0))
-    t = 0.0
-    log_t, log_s, log_T, log_ref, log_att, log_gim = [t], [s.copy()], [], [], [], []
+    log_ref = []
     max_gimbal = 0.0
     steps = 0
     max_track_err = 0.0
@@ -151,24 +159,18 @@ def simulate(
         raise ValueError(f"unknown controller {controller!r}")
 
     while True:
-        r, v, m = s[0:3], s[3:6], s[6]
+        # perfect navigation: flight software sees the true state
+        t, r, v, m, ast = plant.t, plant.r, plant.v, plant.m, plant.att
         tau = t - plan_t0
         t_go = active.tf - tau
 
         if t < t_ig - 1e-9:  # engine-off coast before ignition
-            T = np.zeros(3)
-            h = min(dt, t_ig - t)
-            ast = att_model.step(ast, airflow_axis(r, v), 0.0, h)
-            ref.reset(ast.b, ast.w)
-            log_T.append(T)
+            _, fins = att_model.command(ast, airflow_axis(r, v), 0.0)
+            info = plant.step(0.0, min(dt, t_ig - t), fins=fins)
+            new_att = plant.att
+            ref.reset(new_att.b, new_att.w)
             log_ref.append(r.copy())
-            log_att.append(ast.b.copy())
-            log_gim.append(np.zeros(3))
-            s = truth.step(s, T, h)
-            t += h
-            log_t.append(t)
-            log_s.append(s.copy())
-            if s[0] <= 0.0:
+            if info.contact:
                 break
             continue
 
@@ -203,15 +205,13 @@ def simulate(
             Tn = sol.command(t + 0.5 * h - sol_t0)[0]  # thrust held over the interval
             g_h = sol.command(t + h - sol_t0)[1]  # gimbal target at the end of this step
             Tn = float(np.clip(Tn, rk.T_min, rk.T_max)) if m > rk.m_dry else 0.0
-            ast = att_model.step_gimbal(ast, embed_gimbal(g_h, ast.b), Tn, h)
-            T = Tn * ast.thrust_dir
-            max_gimbal = max(max_gimbal, ast.gimbal_deg)
+            info = plant.step(Tn, h, gimbal=embed_gimbal(g_h, ast.b))
+            new_att = plant.att
             if probe is not None:
                 probe({
-                    "t": t, "tau": tau, "t_go": t_go, "r": r.copy(), "v": v.copy(), "m": m,
-                    "r_ref": r_ref, "v_ref": v_ref, "Tn": Tn, "g_h_cmd": g_h,
-                    **{k: np.array(v_) for k, v_ in att_model.last.items()},
-                    "b": ast.b.copy(), "w": ast.w.copy(), "t_hat": ast.thrust_dir, "T": T.copy(),
+                    "t": t, "tau": tau, "t_go": t_go, "r": r, "v": v, "m": m,
+                    "r_ref": r_ref, "v_ref": v_ref, "Tn": Tn, "g_h_cmd": g_h, **_actuator_signals(info, new_att),
+                    "b": new_att.b, "w": new_att.w, "t_hat": new_att.thrust_dir, "T": info.thrust_vec,
                     "mpc_x": sol.x, "mpc_t": sol.t + sol_t0, "plan": active,
                 })
             max_track_err = max(max_track_err, float(np.linalg.norm(r_ref - r)))
@@ -235,83 +235,70 @@ def simulate(
             if m <= rk.m_dry:
                 Tn = 0.0
             # attitude: smooth the commanded direction (reference model), then the attitude loop
-            # drives the gimbal; the actual thrust acts along the nozzle (body axis + gimbal)
-            ref.step(T / np.linalg.norm(T), h, ref_brake * att_model.alpha_avail(max(Tn, rk.T_min)))
-            ast = att_model.step(ast, ref.b, Tn, h, w_ff=ref.w, a_ff=ref.a)
-            if probe is not None:
-                T_dir_cmd = T / np.linalg.norm(T)
-            T = Tn * ast.thrust_dir
-            max_gimbal = max(max_gimbal, ast.gimbal_deg)
+            # commands the gimbal; the actual thrust acts along the nozzle (body axis + gimbal)
+            T_dir_cmd = T / np.linalg.norm(T)
+            ref.step(T_dir_cmd, h, ref_brake * att_model.alpha_avail(max(Tn, rk.T_min)))
+            gimbal, fins = att_model.command(ast, ref.b, Tn, w_ff=ref.w, a_ff=ref.a)
+            info = plant.step(Tn, h, gimbal=gimbal, fins=fins)
+            new_att = plant.att
             if probe is not None:
                 probe({
-                    "t": t, "tau": tau, "t_go": t_go, "r": r.copy(), "v": v.copy(), "m": m,
+                    "t": t, "tau": tau, "t_go": t_go, "r": r, "v": v, "m": m,
                     "r_ref": r_ref, "v_ref": v_ref, "u_ref": u_ref, "a_cmd": a_cmd,
                     "T_cmd": T_cmd, "dir_cmd": T_dir_cmd, "Tn": Tn,
                     "b_ref": ref.b.copy(), "w_ref": ref.w.copy(), "a_ref": ref.a.copy(),
-                    **{k: np.array(v_) for k, v_ in att_model.last.items()},
-                    "b": ast.b.copy(), "w": ast.w.copy(), "t_hat": ast.thrust_dir, "T": T.copy(),
+                    **att_model.last, **_actuator_signals(info, new_att),
+                    "b": new_att.b, "w": new_att.w, "t_hat": new_att.thrust_dir, "T": info.thrust_vec,
                     "plan_N": len(active.t), "plan_tf": active.tf, "plan_hold": active.hold,
                 })
             max_track_err = max(max_track_err, float(np.linalg.norm(r_ref - r)))
         else:  # engine cut at end of plan: ballistic until contact (fins hold attitude)
-            r_ref, T = np.zeros(3), np.zeros(3)
-            h = dt
-            ast = att_model.step(ast, ast.b, 0.0, h)
-        log_T.append(T)
+            r_ref = np.zeros(3)
+            _, fins = att_model.command(ast, ast.b, 0.0)
+            info = plant.step(0.0, dt, fins=fins)
+            new_att = plant.att
         log_ref.append(r_ref)
-        log_att.append(ast.b.copy())
-        log_gim.append(ast.g.copy() if np.linalg.norm(T) > 0 else np.zeros(3))
-        if np.linalg.norm(T) > 0 and ast.gimbal_deg >= 0.98 * att_model.p.gimbal_max_deg:
-            gimbal_sat_steps += 1
-
-        s_new = truth.step(s, T, h)
-        t_new = t + h
+        if info.thrust > 0:
+            max_gimbal = max(max_gimbal, new_att.gimbal_deg)
+            if new_att.gimbal_deg >= 0.98 * att_model.p.gimbal_max_deg:
+                gimbal_sat_steps += 1
         steps += 1
-        if s_new[0] <= 0.0:  # ground contact: interpolate to h = 0
-            frac = s[0] / (s[0] - s_new[0]) if s[0] > 0 else 0.0
-            s_new = s + frac * (s_new - s)
-            t_new = t + frac * h
-            log_t.append(t_new)
-            log_s.append(s_new)
+        if info.contact:
             break
-        s, t = s_new, t_new
-        log_t.append(t)
-        log_s.append(s.copy())
-        if t > plan_t0 + active.tf + 30.0:  # never came down -> give up
+        if plant.t > plan_t0 + active.tf + 30.0:  # never came down -> give up
             break
 
-    log_T.append(log_T[-1])
+    plant.finish()
     log_ref.append(log_ref[-1])
-    log_att.append(ast.b.copy())
-    log_gim.append(log_gim[-1] if log_gim else np.zeros(3))
-    S = np.array(log_s)
+    tel = plant.telemetry()
+    ast = plant.att
     res = SimResult(
         name=name,
-        t=np.array(log_t),
-        r=S[:, 0:3],
-        v=S[:, 3:6],
-        m=S[:, 6],
-        T=np.array(log_T),
+        t=tel["t"],
+        r=tel["r"],
+        v=tel["v"],
+        m=tel["m"],
+        T=tel["thrust"],
         r_ref=np.array(log_ref),
-        att=np.array(log_att),
-        gimbal=np.array(log_gim),
-        wind=np.array([truth.wind_at(h) for h in S[:, 0]]),
+        att=tel["b"],
+        gimbal=tel["g"],
+        wind=tel["wind"],
     )
-    v_td = S[-1, 3:6]
+    v_td = res.v[-1]
     res.metrics = {
-        "landed": bool(S[-1, 0] <= 1e-6),
-        "touchdown_time": float(log_t[-1]),
+        "landed": bool(res.r[-1, 0] <= 1e-6),
+        "touchdown_time": float(res.t[-1]),
         "plan_tf": plan.tf,
         "t_ignition": t_ig,
-        "touchdown_pos_err_m": float(np.linalg.norm(S[-1, 1:3])),
+        "touchdown_pos_err_m": float(np.linalg.norm(res.r[-1, 1:3])),
         "touchdown_vert_speed": float(-v_td[0]),
         "touchdown_horiz_speed": float(np.linalg.norm(v_td[1:3])),
         "touchdown_tilt_deg": float(np.degrees(np.arccos(np.clip(ast.b[0], -1, 1)))),
         "touchdown_body_rate_deg_s": float(np.degrees(np.linalg.norm(ast.w))),
-        "max_slew_rate_deg_s": float(np.degrees(max_rate(np.array(log_t), np.array(log_att)))),
+        "max_slew_rate_deg_s": float(np.degrees(max_rate(res.t, res.att))),
         "max_gimbal_deg": max_gimbal,
-        "fuel_used_kg": float(sc.m0 - S[-1, 6]),
-        "fuel_margin_kg": float(S[-1, 6] - rk.m_dry),
+        "fuel_used_kg": float(sc.m0 - res.m[-1]),
+        "fuel_margin_kg": float(res.m[-1] - rk.m_dry),
         "max_tracking_err_m": max_track_err,
         "gimbal_sat_frac": gimbal_sat_steps / max(steps, 1),
         "controller": controller,
@@ -324,6 +311,8 @@ def simulate(
         res.metrics.update(mpc_solves=mpc_solves, mpc_failures=mpc_fail,
                            mpc_mean_solve_ms=1e3 * mpc_time / max(mpc_solves - mpc_fail, 1))
     res.replans = replans
+    if telemetry_path is not None:
+        plant.write_telemetry(telemetry_path, {"name": name, "scenario": sc.name, "metrics": res.metrics})
     return res
 
 

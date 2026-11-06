@@ -1,0 +1,18 @@
+[package]
+name = "sim-py"
+description = "Python bindings (module `boosted_sim`): the Rust plant that Python flight software drives."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "boosted_sim"
+crate-type = ["cdylib"]
+
+[dependencies]
+sim-core.workspace = true
+sim-vehicle.workspace = true
+sim-telemetry.workspace = true
+serde_json.workspace = true
+pyo3 = { version = "0.30", features = ["extension-module", "abi3-py313"] }

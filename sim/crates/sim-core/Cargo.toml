@@ -1,0 +1,13 @@
+[package]
+name = "sim-core"
+description = "Domain-free simulation engine: math, integrators, events, the Model trait."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+nalgebra.workspace = true
+
+[dev-dependencies]
+approx.workspace = true

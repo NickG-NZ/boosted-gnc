@@ -3,6 +3,11 @@ revision = 3
 requires-python = ">=3.13"
 
 [[package]]
+name = "boosted-sim"
+version = "0.1.0"
+source = { directory = "sim" }
+
+[[package]]
 name = "cffi"
 version = "2.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -175,6 +180,7 @@ name = "flight-control"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "boosted-sim" },
     { name = "clarabel" },
     { name = "cvxpy" },
     { name = "numpy" },
@@ -191,6 +197,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "boosted-sim", directory = "sim" },
     { name = "clarabel", specifier = ">=0.11.1" },
     { name = "cvxpy", specifier = ">=1.9.3" },
     { name = "numpy", specifier = ">=2.5.4" },
