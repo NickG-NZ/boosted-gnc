@@ -37,12 +37,13 @@ The goal is to make advanced GNC methods easy to read, run and compare against a
 
 ## Demo
 
-SCvx-planned landing with drag, +20% C_D error and gusty wind, tracked by MPC with 2 Hz re-planning
-(click to play):
-
-
+**SCvx** landing with drag, +20% C_D error and gusty wind, tracked by MPC with 2 Hz re-planning:
 
 https://github.com/user-attachments/assets/c1ecb7df-4ab0-4165-9dc0-3fc33abc0117
+
+**G-FOLD** landing in atmosphere, tracked by MPC with 2 Hz re-planning:
+
+[docs/gfold-landing.mp4](docs/gfold-landing.mp4)
 
 
 
