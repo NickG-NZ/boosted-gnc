@@ -19,6 +19,7 @@ from .dynamics import TruthModel
 from .mpc import TrackingMPC, embed_gimbal
 from .trajectory import Trajectory
 from .vehicle import E1, Scenario, rotate_toward
+from .wind import WindModel
 
 
 def max_rate(t: np.ndarray, att: np.ndarray) -> float:
@@ -59,6 +60,7 @@ class SimResult:
     r_ref: np.ndarray
     att: np.ndarray  # body axis (unit vector, guidance frame)
     gimbal: np.ndarray  # engine gimbal vector (perp. to att, |g| = sin(deflection), guidance frame)
+    wind: np.ndarray  # truth wind at the vehicle (m/s, guidance frame)
     metrics: dict[str, Any] = field(default_factory=dict)
     replans: list[dict[str, Any]] = field(default_factory=list)
 
@@ -76,6 +78,7 @@ class SimResult:
             "r_ref": self.r_ref[idx].round(4).tolist(),
             "att": self.att[idx].round(5).tolist(),
             "gimbal": self.gimbal[idx].round(5).tolist(),
+            "wind": self.wind[idx].round(3).tolist(),
             "metrics": self.metrics,
             "replans": self.replans,
         }
@@ -119,16 +122,15 @@ def simulate(
     # attitude: rigid-body pitch/yaw driven by the engine gimbal (see attitude.py). The tracker's
     # thrust command sets the desired body axis; thrust acts along the deflected nozzle.
     # Engine off -> grid fins keep the body aligned with the airflow (falling engine-first).
-    wind = truth.wind if truth.wind is not None else sc.env.wind_vec
     att_model = AttitudeModel(AttitudeParams.from_dict(rk.attitude))
 
-    def airflow_axis(v):
-        vr = v - wind
+    def airflow_axis(r, v):
+        vr = v - truth.wind_at(r[0])
         n = np.linalg.norm(vr)
         return -vr / n if n > 1e-6 else E1.copy()
 
     s = np.concatenate([sc.r0, sc.v0, [sc.m0]])
-    b0 = airflow_axis(sc.v0) if sc.att0 is None else sc.att0 / np.linalg.norm(sc.att0)
+    b0 = airflow_axis(sc.r0, sc.v0) if sc.att0 is None else sc.att0 / np.linalg.norm(sc.att0)
     ast = AttitudeState(b=b0)
     # smooth pointing reference (bounded rate and angular acceleration) for the attitude loop
     ref = ReferenceModel(b0, omega=cfg.get("ref_omega", 1.5), rate_max=math.radians(cfg.get("cmd_rate_deg_s", 8.0)))
@@ -156,7 +158,7 @@ def simulate(
         if t < t_ig - 1e-9:  # engine-off coast before ignition
             T = np.zeros(3)
             h = min(dt, t_ig - t)
-            ast = att_model.step(ast, airflow_axis(v), 0.0, h)
+            ast = att_model.step(ast, airflow_axis(r, v), 0.0, h)
             ref.reset(ast.b, ast.w)
             log_T.append(T)
             log_ref.append(r.copy())
@@ -293,6 +295,7 @@ def simulate(
         r_ref=np.array(log_ref),
         att=np.array(log_att),
         gimbal=np.array(log_gim),
+        wind=np.array([truth.wind_at(h) for h in S[:, 0]]),
     )
     v_td = S[-1, 3:6]
     res.metrics = {
@@ -331,5 +334,5 @@ def truth_from_case(sc: Scenario, case_truth: dict[str, Any]) -> TruthModel:
         drag=case_truth.get("drag", True),
         cd_scale=case_truth.get("cd_scale", 1.0),
         isp_scale=case_truth.get("isp_scale", 1.0),
-        wind=np.asarray(case_truth["wind"], float) if "wind" in case_truth else None,
+        wind=WindModel.from_config(case_truth["wind"]) if "wind" in case_truth else None,
     )

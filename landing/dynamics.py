@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .vehicle import Environment, Rocket
+from .wind import WindModel
 
 
 @dataclass(frozen=True)
@@ -16,17 +17,19 @@ class TruthModel:
     drag: bool = True
     cd_scale: float = 1.0
     isp_scale: float = 1.0
-    wind: np.ndarray | None = None  # overrides env.wind if given
+    wind: WindModel | None = None  # overrides env.wind if given (see wind.py)
 
     @property
     def alpha(self) -> float:
         return 1.0 / (self.rocket.isp * self.isp_scale * self.env.g0)
 
+    def wind_at(self, h: float) -> np.ndarray:
+        return self.env.wind_vec if self.wind is None else self.wind.at(h)
+
     def drag_force(self, r: np.ndarray, v: np.ndarray, thrusting: bool) -> np.ndarray:
         if not self.drag:
             return np.zeros(3)
-        w = self.env.wind_vec if self.wind is None else np.asarray(self.wind, float)
-        vr = v - w
+        vr = v - self.wind_at(r[0])
         cd = self.rocket.C_D * self.cd_scale * (self.rocket.kappa if thrusting else 1.0)
         rho = self.env.rho_atm(max(r[0], 0.0))
         return -0.5 * rho * self.rocket.S_ref * cd * np.linalg.norm(vr) * vr

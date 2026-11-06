@@ -45,6 +45,7 @@ landing/
   guidance.py    pluggable guidance objects (plan / plan_from / replan) for G-FOLD and SCvx
   ignition.py    coast prediction + latest-feasible ignition search
   dynamics.py    truth model (RK4), open-loop re-sim
+  wind.py        truth wind: steady wind with altitude shear + seeded gusts
   sim.py         closed-loop simulator: tracker, thrust projection, optional re-planning
 web/             three.js viewer: scene.js, rocket3d.js (model built from rocket geometry), charts.js, main.js
 ```
@@ -56,6 +57,17 @@ Sim cases are defined in the scenario JSON:
  "truth": {"drag": true, "cd_scale": 1.2, "wind": [0, 0, 8], "isp_scale": 0.99},
  "replan_hz": 2.0}
 ```
+
+`truth.wind` is either a constant vector (m/s, frame `[up, x, y]`) or the wind model in `landing/wind.py`:
+
+```json
+"wind": {"mean": [0, 0, 8], "ref_alt": 10, "shear": 0.14, "gust_sigma": 1.5, "gust_length": 200, "seed": 1}
+```
+
+The steady part is `mean` at `ref_alt`, scaled with altitude by the power law `(h / ref_alt)^shear`. Gusts are a
+seeded random profile over altitude (correlation length `gust_length`, std `gust_sigma` horizontally, half that
+vertically), so the rocket meets them as it descends and each seed is exactly repeatable. Guidance never sees the
+truth wind; it plans with `environment.wind`.
 
 ## Attitude constraints (`constraints` block of a scenario; all optional)
 

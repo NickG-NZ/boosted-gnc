@@ -7,7 +7,7 @@ const row = (k, v, u = "") => `<div class="kv"><span>${k}</span><b>${v}</b>${u ?
 const card = (title, body, cls = "") => `<section class="dcard ${cls}"><h3>${title}</h3>${body}</section>`;
 
 /** Full report for one run: configuration, outcome, guidance plan, control effort, time histories. */
-export function renderDetails(el, c, { rocket, scenario, verdict, describe }) {
+export function renderDetails(el, c, { rocket, scenario, verdict, describe, windSummary }) {
   const sim = c.sim, m = sim.metrics, p = c.planData, pi = p?.info ?? {};
   const tr = m.truth || {};
   const [cls, label] = verdict(m);
@@ -21,7 +21,7 @@ export function renderDetails(el, c, { rocket, scenario, verdict, describe }) {
     row("Re-planning", m.replan_hz ? `${m.replan_hz} Hz` : "off (plan fixed)"),
     row("Truth drag", tr.drag === false ? "off (vacuum)" : "on"),
     row("C_D scale", f(tr.cd_scale ?? 1, 2), "×"),
-    row("Wind", tr.wind ? `[${tr.wind.map((w) => w.toFixed(1)).join(", ")}]` : "none", tr.wind ? "m/s" : ""),
+    row("Wind", windSummary(tr.wind)?.replace(/^wind /, "") ?? "none"),
     row("Isp scale", f(tr.isp_scale ?? 1, 3), "×"),
     row("Solved", solved ? solved.replace("T", " ") : "—"),
   ].join("");
@@ -70,6 +70,7 @@ export function renderDetails(el, c, { rocket, scenario, verdict, describe }) {
   const charts = [
     ["alt", "Altitude", "m"], ["spd", "Speed: vertical — / horizontal - -", "m/s"], ["thr", "Throttle", "% T_max"],
     ["att", "Attitude: pitch — / yaw - -", "°"], ["gim", "Gimbal: pitch — / yaw - -", "°"], ["mass", "Mass", "kg"],
+    ...(sim.wind ? [["wind", "Wind at vehicle: y — / x - - / up (faint)", "m/s"]] : []),
   ];
 
   el.innerHTML = `
@@ -99,11 +100,12 @@ export function renderDetails(el, c, { rocket, scenario, verdict, describe }) {
     att: py ? [{ t, y: py.map((a) => a[0]), color: col, width: 1.6 }, { t, y: py.map((a) => a[1]), color: col, width: 1.4, dashed: true }] : [],
     gim: gpy ? [{ t, y: gpy.map((a) => a[0]), color: col, width: 1.4 }, { t, y: gpy.map((a) => a[1]), color: col, width: 1.2, dashed: true }] : [],
     mass: [{ t, y: sim.m, color: col, width: 1.8 }],
+    wind: sim.wind ? [{ t, y: sim.wind.map((w) => w[2]), color: col, width: 1.6 }, { t, y: sim.wind.map((w) => w[1]), color: col, width: 1.4, dashed: true }, { t, y: sim.wind.map((w) => w[0]), color: col, width: 1, dashed: true, alpha: 0.5 }] : [],
   };
   const gmax = rocket.attitude?.gimbal_max_deg ?? 8;
   const opts = {
     alt: { yMin: 0 }, spd: { yMin: 0 }, thr: { yMin: 0, yMax: 105, bands: [{ y: rocket.thr_min * 100, label: "min" }] },
-    att: {}, gim: { yMin: -gmax * 1.1, yMax: gmax * 1.1, bands: [{ y: gmax, label: `+${gmax}°` }, { y: -gmax, label: `−${gmax}°` }] }, mass: {},
+    att: {}, wind: {}, gim: { yMin: -gmax * 1.1, yMax: gmax * 1.1, bands: [{ y: gmax, label: `+${gmax}°` }, { y: -gmax, label: `−${gmax}°` }] }, mass: {},
   };
   const ign = m.t_ignition;
   for (const [id, title, unit] of charts) {

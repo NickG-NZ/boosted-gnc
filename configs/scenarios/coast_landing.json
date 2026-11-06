@@ -60,9 +60,9 @@
     {"name": "G-FOLD · atmosphere · re-plan 2 Hz · MPC", "plan": "gfold", "truth": {"drag": true}, "replan_hz": 2.0, "controller": "mpc"},
     {"name": "SCvx drag · atmosphere · cascade", "plan": "scvx", "truth": {"drag": true}, "controller": "cascade"},
     {"name": "SCvx drag · atmosphere · MPC", "plan": "scvx", "truth": {"drag": true}, "controller": "mpc"},
-    {"name": "SCvx drag · +20% C_D, 8 m/s wind · cascade", "plan": "scvx", "truth": {"drag": true, "cd_scale": 1.2, "wind": [0.0, 0.0, 8.0], "isp_scale": 0.99}, "controller": "cascade"},
-    {"name": "SCvx drag · +20% C_D, 8 m/s wind · MPC", "plan": "scvx", "truth": {"drag": true, "cd_scale": 1.2, "wind": [0.0, 0.0, 8.0], "isp_scale": 0.99}, "controller": "mpc"},
-    {"name": "SCvx drag · +20% C_D, 8 m/s wind · re-plan 2 Hz · cascade", "plan": "scvx", "truth": {"drag": true, "cd_scale": 1.2, "wind": [0.0, 0.0, 8.0], "isp_scale": 0.99}, "replan_hz": 2.0, "controller": "cascade"},
-    {"name": "SCvx drag · +20% C_D, 8 m/s wind · re-plan 2 Hz · MPC", "plan": "scvx", "truth": {"drag": true, "cd_scale": 1.2, "wind": [0.0, 0.0, 8.0], "isp_scale": 0.99}, "replan_hz": 2.0, "controller": "mpc"}
+    {"name": "SCvx drag · +20% C_D, gusty wind · cascade", "plan": "scvx", "truth": {"drag": true, "cd_scale": 1.2, "wind": {"mean": [0.0, 0.0, 8.0], "shear": 0.14, "gust_sigma": 1.5, "gust_length": 200.0, "seed": 1}, "isp_scale": 0.99}, "controller": "cascade"},
+    {"name": "SCvx drag · +20% C_D, gusty wind · MPC", "plan": "scvx", "truth": {"drag": true, "cd_scale": 1.2, "wind": {"mean": [0.0, 0.0, 8.0], "shear": 0.14, "gust_sigma": 1.5, "gust_length": 200.0, "seed": 1}, "isp_scale": 0.99}, "controller": "mpc"},
+    {"name": "SCvx drag · +20% C_D, gusty wind · re-plan 2 Hz · cascade", "plan": "scvx", "truth": {"drag": true, "cd_scale": 1.2, "wind": {"mean": [0.0, 0.0, 8.0], "shear": 0.14, "gust_sigma": 1.5, "gust_length": 200.0, "seed": 1}, "isp_scale": 0.99}, "replan_hz": 2.0, "controller": "cascade"},
+    {"name": "SCvx drag · +20% C_D, gusty wind · re-plan 2 Hz · MPC", "plan": "scvx", "truth": {"drag": true, "cd_scale": 1.2, "wind": {"mean": [0.0, 0.0, 8.0], "shear": 0.14, "gust_sigma": 1.5, "gust_length": 200.0, "seed": 1}, "isp_scale": 0.99}, "replan_hz": 2.0, "controller": "mpc"}
   ]
 }

@@ -179,6 +179,8 @@ def test_mpc_discretization_is_exact():
     ("scvx", {"drag": True}, 0.0),
     ("scvx", {"drag": True, "cd_scale": 1.2, "wind": [0, 0, 8], "isp_scale": 0.99}, 0.0),
     ("gfold", {"drag": True}, 2.0),
+    ("scvx", {"drag": True, "cd_scale": 1.2, "isp_scale": 0.99,
+              "wind": {"mean": [0, 0, 8], "shear": 0.14, "gust_sigma": 1.5, "seed": 1}}, 0.0),
 ])
 def test_mpc_lands_precisely(coast_sc, coast_plans, case):
     key, truth, hz = case

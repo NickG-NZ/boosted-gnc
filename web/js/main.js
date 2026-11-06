@@ -80,12 +80,25 @@ function runTags(m, ctrl) {
 }
 const tagHtml = (tags) => tags.map((g) => `<span class="tag${g.k ? ` ${g.k}` : ""}">${g.t}</span>`).join("");
 
+/** Short text for a case's truth wind: constant [x,y,z] or the shear+gust model (landing/wind.py). */
+function windSummary(w) {
+  if (!w) return null;
+  const mean = Array.isArray(w) ? w : w.mean ?? [0, 0, 0];
+  const v = Math.hypot(...mean);
+  if (Array.isArray(w)) return v ? `wind ${v.toFixed(0)} m/s` : null;
+  const parts = [`wind ${v.toFixed(0)} m/s @ ${w.ref_alt ?? 10} m`];
+  if (w.shear) parts.push(`shear ^${w.shear}`);
+  if (w.gust_sigma) parts.push(`gusts σ ${w.gust_sigma} m/s`);
+  return parts.join(", ");
+}
+
 function describe(m) {
   const tr = m.truth || {};
   let truth = tr.drag === false ? "vacuum" : "atmosphere";
   const pert = [];
   if (tr.cd_scale && tr.cd_scale !== 1) pert.push(`C_D ×${tr.cd_scale}`);
-  if (tr.wind && tr.wind.some((w) => w)) pert.push(`wind ${Math.hypot(...tr.wind).toFixed(0)} m/s`);
+  const wind = windSummary(tr.wind);
+  if (wind) pert.push(wind);
   if (tr.isp_scale && tr.isp_scale !== 1) pert.push(`Isp ×${tr.isp_scale}`);
   if (pert.length) truth += ` (${pert.join(", ")})`;
   const loop = m.replan_hz ? `re-plans at ${m.replan_hz} Hz` : "plan fixed in advance";
@@ -159,7 +172,7 @@ async function main() {
   function showDetails() {
     if (detailsFor === selected) return;
     detailsFor = selected;
-    renderDetails($("details"), cases[selected], { rocket, scenario, verdict, describe });
+    renderDetails($("details"), cases[selected], { rocket, scenario, verdict, describe, windSummary });
   }
   function setTab(name) {
     tab = name;
