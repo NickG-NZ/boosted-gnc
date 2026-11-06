@@ -23,7 +23,8 @@ in an interactive 3D viewer.
 
 ## Quick start
 
-Requires Python 3.13+ and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.13+, [uv](https://docs.astral.sh/uv/) and a Rust toolchain with `cargo` on `PATH`. `uv sync`
+builds the Rust sim engine in `sim/` (see [sim/README.md](sim/README.md)) and rebuilds it when its sources change.
 
 ```bash
 uv sync
@@ -42,7 +43,8 @@ uv run python run.py path/to/scenario.json    # use a different scenario
 uv run pytest                                 # run the test suite
 ```
 
-Results are written to `web/data/results.json`.
+Results are written to `web/data/results.json`, and each run's truth telemetry to
+`artifacts/<scenario>/<case>.telemetry.json` (`--artifacts ''` to skip).
 
 ## Configuration
 
@@ -89,26 +91,6 @@ Optional keys in a scenario's `constraints` block:
 | `terminal_cone_deg`, `terminal_frac` | Keeps the final part of the burn near vertical |
 | `max_slew_deg_s` | Rate limit on the planned thrust direction |
 
-## Project layout
+## License
 
-```
-configs/        vehicle and scenario definitions
-landing/
-  gfold.py      G-FOLD convex guidance
-  scvx.py       SCvx guidance with drag
-  guidance.py   common guidance interface and re-planning
-  ignition.py   coast prediction and ignition timing
-  attitude.py   attitude dynamics and gimbal control
-  mpc.py        tracking MPC
-  dynamics.py   truth dynamics
-  wind.py       wind and gust model
-  sim.py        closed-loop simulator
-web/            three.js viewer
-tests/          acceptance and unit tests
-```
-
-## Modeling assumptions
-
-- Perfect navigation (true state is available to the controller).
-- Re-planning is instantaneous; solver latency is not modeled.
-- Constant transverse inertia and center-of-gravity location.
+Released under the [MIT License](LICENSE).
