@@ -32,6 +32,13 @@ The goal is to make advanced GNC methods easy to read, run and compare against a
 - 🌐 3D browser visualization for replaying and comparing flights
 - ⚙️ Vehicles and scenarios defined in plain JSON
 
+## Demo
+
+SCvx-planned landing with drag, +20% C_D error and gusty wind, tracked by MPC with 2 Hz re-planning
+(click to play):
+
+<a href="docs/landing.mp4"><img src="docs/landing.jpg" alt="Landing replay in the 3D viewer" width="100%"></a>
+
 ## Quick start
 
 Requires Python 3.13+, [uv](https://docs.astral.sh/uv/) and a Rust toolchain with `cargo` on `PATH`. `uv sync`
