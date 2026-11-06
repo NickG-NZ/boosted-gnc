@@ -1,5 +1,8 @@
 """Plan (G-FOLD + SCvx), simulate the configured cases, and export data for the 3D viewer.
 
+Guidance, control and the simulation all run in Rust (`sim/`, Python module `boosted_sim`); this
+script only drives runs, merges results and serves the three.js viewer.
+
     uv run python run.py [scenario.json]            solve all cases, write web/data/results.json
     uv run python run.py --only "CASE NAME"         re-solve one case, merged into the stored results
     uv run python run.py --serve                    open the viewer on the stored results (no solve);
@@ -12,135 +15,36 @@ from __future__ import annotations
 import argparse
 import http.server
 import json
-import re
 import subprocess
 import sys
 import threading
 import time
-import warnings
 import webbrowser
 from pathlib import Path
 
-import numpy as np
-
-from gnc.dynamics import TruthModel, open_loop_resim
-from gnc.guidance.guidance import GFoldGuidance, SCvxGuidance
-from gnc.guidance.ignition import plan_with_ignition
-from gnc.sim import simulate, truth_from_case
-from gnc.vehicle import Scenario
-
-warnings.filterwarnings("ignore", message="Solution may be inaccurate")
+import boosted_sim
 
 
 def solve(scenario_path: str | Path, only: list[str] | None = None, existing: dict | None = None,
           verbose: bool = True, progress=None, artifacts: Path | None = None) -> dict:
-    """Plan and simulate the scenario's cases (all, or only those named in `only`) and return the
-    viewer data. With `only` and `existing`, the new runs are merged into the existing results.
-    Each sim record carries the plan it flew, so a partial re-run stays self-consistent.
-    `progress(stage, done, total, label)` is called before each plan / sim.
-    With `artifacts`, each sim's plant telemetry is written to artifacts/<mission>/<case>.telemetry.json."""
-    sc = Scenario.from_json(scenario_path)
-    rk = sc.rocket
-    print(f"Scenario: {sc.name} | rocket: {rk.name}")
-    cases = list(sc.sim_cases)
-    if only is not None:
-        missing = [n for n in only if n not in {c["name"] for c in cases}]
-        if missing:
-            raise ValueError(f"cases not in {scenario_path}: {missing}")
-        cases = [c for c in cases if c["name"] in only]
-    need = {c["plan"] for c in cases}
-    if "scvx" in need and not sc.coast:
-        need.add("gfold")  # SCvx is warm-started from G-FOLD without a coast phase
-    keys = [k for k in ("gfold", "scvx") if k in need]
-    total, done = len(keys) + len(cases), 0
-
-    def step(stage: str, label: str) -> None:
-        nonlocal done
-        if progress:
-            progress(stage, done, total, label)
-        done += 1
-
-    guidance = {"gfold": GFoldGuidance(sc), "scvx": SCvxGuidance(sc)}
-    plans = {}
-    for key in keys:
-        step("plan", {"gfold": "G-FOLD plan", "scvx": "SCvx plan"}[key])
-        t0 = time.perf_counter()
-        if sc.coast:  # engine-off start: choose ignition time, then plan from the predicted state
-            p = plan_with_ignition(sc, guidance[key], verbose=verbose)
-        else:
-            p = guidance[key].plan(verbose=verbose, **({"init": plans["gfold"]} if key == "scvx" else {}))
-        p.info["solve_time_s"] = time.perf_counter() - t0
-        resim = open_loop_resim(TruthModel(rk, sc.env, drag=key == "scvx"), p)
-        p.info["open_loop_terminal_err"] = [float(np.linalg.norm(resim[0:3])), float(np.linalg.norm(resim[3:6]))]
-        plans[key] = p
-
-    print("\nPlans")
-    print(f"  {'':8s} {'ignite':>7s} {'h_ig':>7s} {'burn':>7s} {'m_f [kg]':>10s} {'fuel [kg]':>10s} {'tight':>9s} {'resim r/v err':>16s}")
-    for k, p in plans.items():
-        e = p.info["open_loop_terminal_err"]
-        print(
-            f"  {k:8s} {p.info.get('t_ignition', 0.0):6.2f}s {p.r[0, 0]:6.0f}m {p.tf:6.2f}s {p.m[-1]:10.1f} {sc.m0 - p.m[-1]:10.1f} "
-            f"{p.info['tightness_max']:9.1e} {e[0]:7.4f}m {e[1]:6.4f}m/s"
-        )
-    plan_dicts = {k: p.to_dict(rk.T_max) for k, p in plans.items()}
-
+    """Plan and simulate the scenario's cases (all, or only those named in `only`) with the Rust
+    flight software + sim (`boosted_sim`) and return the viewer data. With `only` and `existing`,
+    the new runs are merged into the existing results; each sim record carries the plan it flew,
+    so a partial re-run stays self-consistent. `progress(stage, done, total, label)` is called
+    before each plan / sim. With `artifacts`, each sim's telemetry is written to
+    artifacts/<mission>/<case>.telemetry.json."""
+    data = json.loads(boosted_sim.solve(str(scenario_path), only=only, verbose=verbose,
+                                        artifacts=str(artifacts) if artifacts else None, progress=progress))
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
-    new_sims = {}
-    print("\nClosed-loop simulations")
-    print(f"  {'case':62s} {'pos err':>8s} {'v_vert':>7s} {'v_hor':>6s} {'tilt':>5s} {'fuel':>7s} {'gsat%':>5s} {'replans':>7s}")
-    for case in cases:
-        step("sim", case["name"])
-        t0 = time.perf_counter()
-        res = simulate(
-            sc,
-            plans[case["plan"]],
-            truth_from_case(sc, case.get("truth", {})),
-            case["name"],
-            guidance=guidance[case["plan"]],
-            replan_hz=case.get("replan_hz", 0.0),
-            controller=case.get("controller", "cascade"),
-            telemetry_path=artifacts / Path(scenario_path).parent.name / f"{slug(case['name'])}.telemetry.json"
-            if artifacts else None,
-        )
-        res.metrics["wall_time_s"] = time.perf_counter() - t0
-        res.metrics["plan"] = case["plan"]
-        res.metrics["truth"] = case.get("truth", {})
-        mt = res.metrics
-        print(
-            f"  {case['name']:62s} {mt['touchdown_pos_err_m']:7.2f}m {mt['touchdown_vert_speed']:6.2f} "
-            f"{mt['touchdown_horiz_speed']:6.2f} {mt['touchdown_tilt_deg']:5.1f} {mt['fuel_used_kg']:7.0f} {100 * mt['gimbal_sat_frac']:5.1f} "
-            f"{mt['n_replans']:4d}/{mt['n_replan_failures']}"
-        )
-        new_sims[case["name"]] = {**res.to_dict(rk.T_max), "plan": plan_dicts[case["plan"]], "solved_at": now}
-    if progress:
-        progress("done", total, total, "")
-
-    old = {s["name"]: s for s in (existing or {}).get("sims", [])} if only is not None else {}
-    sims = [new_sims.get(c["name"]) or old.get(c["name"]) for c in sc.sim_cases]
-    return {
-        "solved_at": now,
-        "scenario": {
-            "name": sc.name,
-            "path": str(scenario_path),
-            "m0": sc.m0,
-            "r0": sc.r0.tolist(),
-            "v0": sc.v0.tolist(),
-            "glide_slope_deg": sc.glide_slope_deg,
-            "wind": list(sc.env.wind),
-        },
-        "rocket": {
-            "name": rk.name, "m_dry": rk.m_dry, "T_max": rk.T_max, "thr_min": rk.thr_min,
-            "thr_max": rk.thr_max, "theta_max_deg": rk.theta_max_deg, "isp": rk.isp,
-            "S_ref": rk.S_ref, "C_D": rk.C_D, "geometry": rk.geometry,
-            "attitude": {k: v for k, v in (rk.attitude or {}).items() if not k.startswith("_")},
-        },
-        "plans": {**(existing or {}).get("plans", {}), **plan_dicts} if only is not None else plan_dicts,
-        "sims": [s for s in sims if s is not None],
-    }
-
-
-def slug(name: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    for s in data["sims"]:
+        s["solved_at"] = now
+    data["solved_at"] = now
+    if only is not None and existing:
+        case_order = [c["name"] for c in json.loads(Path(scenario_path).read_text()).get("sim_cases", [])]
+        merged = {s["name"]: s for s in existing.get("sims", [])} | {s["name"]: s for s in data["sims"]}
+        data["sims"] = [merged[n] for n in case_order if n in merged]
+        data["plans"] = {**existing.get("plans", {}), **data["plans"]}
+    return data
 
 
 def write_results(data: dict, out: Path) -> None:

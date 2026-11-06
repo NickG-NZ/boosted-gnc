@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "boosted-sim"
 version = "0.1.0"
-description = "Rust truth-model simulator (Python bindings)"
+description = "Rust flight software + simulator (Python bindings)"
 requires-python = ">=3.13"
 
 [tool.maturin]

@@ -35,7 +35,7 @@ impl Integrator for Rk4 {
         let k2 = model.derivative(&x.axpy(0.5 * dt, &k1), u);
         let k3 = model.derivative(&x.axpy(0.5 * dt, &k2), u);
         let k4 = model.derivative(&x.axpy(dt, &k3), u);
-        // x + dt/6 (k1 + 2 k2 + 2 k3 + k4), summed in the same order as the Python reference
+        // x + dt/6 (k1 + 2 k2 + 2 k3 + k4)
         let sum = k1.axpy(2.0, &k2).axpy(2.0, &k3).axpy(1.0, &k4);
         x.axpy(dt / 6.0, &sum)
     }

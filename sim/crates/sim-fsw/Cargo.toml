@@ -1,0 +1,18 @@
+[package]
+name = "sim-fsw"
+description = "Flight software: guidance (G-FOLD, SCvx, ignition) and control (cascade, attitude, MPC)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+sim-core.workspace = true
+sim-opt.workspace = true
+sim-scenario.workspace = true
+nalgebra.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+approx.workspace = true

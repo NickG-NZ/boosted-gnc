@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/sim-core", "crates/sim-env", "crates/sim-vehicle", "crates/sim-telemetry", "crates/sim-py"]
+members = ["crates/sim-opt", "crates/sim-scenario", "crates/sim-fsw", "crates/sim-runner", "crates/sim-core", "crates/sim-env", "crates/sim-vehicle", "crates/sim-telemetry", "crates/sim-py"]
 
 [workspace.package]
 version = "0.1.0"
@@ -13,11 +13,22 @@ sim-core = { path = "crates/sim-core" }
 sim-env = { path = "crates/sim-env" }
 sim-vehicle = { path = "crates/sim-vehicle" }
 sim-telemetry = { path = "crates/sim-telemetry" }
+sim-opt = { path = "crates/sim-opt" }
+sim-scenario = { path = "crates/sim-scenario" }
+sim-fsw = { path = "crates/sim-fsw" }
+sim-runner = { path = "crates/sim-runner" }
 nalgebra = "0.35"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"
 approx = "0.5"
+
+# optimisation-heavy code: keep tests and dev builds reasonably fast
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.dev]
+opt-level = 1
 
 [profile.release]
 opt-level = 3

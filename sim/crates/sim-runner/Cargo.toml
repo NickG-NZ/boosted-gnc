@@ -1,0 +1,17 @@
+[package]
+name = "sim-runner"
+description = "Closed-loop runs: plans with the flight software, flies them through the plant, exports results."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+sim-core.workspace = true
+sim-env.workspace = true
+sim-vehicle.workspace = true
+sim-telemetry.workspace = true
+sim-scenario.workspace = true
+sim-fsw.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

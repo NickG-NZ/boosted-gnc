@@ -12,7 +12,7 @@ pub mod wind;
 pub use atmosphere::{Atmosphere, ExponentialAtmosphere};
 pub use config::{EnvironmentConfig, build};
 pub use gravity::{Gravity, UniformGravity};
-pub use wind::{ConstantWind, ProfileWind, Wind};
+pub use wind::{ConstantWind, GustTable, ProfileWind, Wind, gust_profile};
 
 /// The assembled environment the vehicle flies through.
 pub struct Environment {

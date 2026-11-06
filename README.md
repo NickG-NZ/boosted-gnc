@@ -35,7 +35,8 @@ The goal is to make advanced GNC methods easy to read, run and compare against a
 ## Quick start
 
 Requires Python 3.13+, [uv](https://docs.astral.sh/uv/) and a Rust toolchain with `cargo` on `PATH`. `uv sync`
-builds the Rust sim engine in `sim/` (see [sim/README.md](sim/README.md)) and rebuilds it when its sources change.
+builds the Rust guidance, control and sim in `sim/` (see [sim/README.md](sim/README.md)) and rebuilds it when its
+sources change.
 
 ```bash
 uv sync
@@ -51,7 +52,8 @@ new results.
 uv run python run.py                          # solve and simulate every case
 uv run python run.py --only "CASE NAME"       # re-run a single case
 uv run python run.py missions/spec_test_case/scenario.json    # use a different mission
-uv run pytest                                 # run the test suite
+cd sim && cargo test                          # run the test suite (Rust)
+uv run pytest                                 # Python bindings smoke test
 ```
 
 Results are written to `web/data/results.json`, and each run's truth telemetry to

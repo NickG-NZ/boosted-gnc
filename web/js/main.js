@@ -80,7 +80,7 @@ function runTags(m, ctrl) {
 }
 const tagHtml = (tags) => tags.map((g) => `<span class="tag${g.k ? ` ${g.k}` : ""}">${g.t}</span>`).join("");
 
-/** Short text for a case's truth wind: constant [x,y,z] or the shear+gust model (gnc/wind.py). */
+/** Short text for a case's truth wind: constant [x,y,z] or the shear+gust model (sim/crates/sim-env/src/wind.rs). */
 function windSummary(w) {
   if (!w) return null;
   const mean = Array.isArray(w) ? w : w.mean ?? [0, 0, 0];

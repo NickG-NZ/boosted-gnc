@@ -1,0 +1,10 @@
+[package]
+name = "sim-opt"
+description = "Convex optimisation layer: a small conic problem builder on top of Clarabel."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+clarabel = "0.11"

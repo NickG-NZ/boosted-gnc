@@ -42,7 +42,7 @@
   },
 
   "mpc": {
-    "_doc": "Inner-loop tracking MPC (gnc/control/mpc.py), used by cases with controller = mpc. Weights are per unit^2 (terminal) or per unit^2 per second (running).",
+    "_doc": "Inner-loop tracking MPC (sim/crates/sim-fsw/src/control/mpc.rs), used by cases with controller = mpc. Weights are per unit^2 (terminal) or per unit^2 per second (running).",
     "N": 30, "dt0": 0.05, "stop_tgo": 0.15,
     "w_r_lat": 20.0, "w_r_up": 500.0, "w_v": 20.0, "w_tilt": 3.0e4, "w_rate": 3.0e4, "w_gimbal_term": 1.0e3,
     "w_dr": 0.02, "w_dv": 0.05, "w_db": 300.0, "w_cone": 1.0e6, "w_ug": 20.0, "w_dT": 1.0,
