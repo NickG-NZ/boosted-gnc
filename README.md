@@ -24,7 +24,7 @@ The goal is to make advanced GNC methods easy to read, run and compare against a
 ## Highlights
 
 - 🦀 Fast, modular simulation engine written in Rust, with Python bindings
-- 🚀 High-fidelity 6-DOF vehicle dynamics with thrust vector control, grid fins and variable mass
+- 🚀 Vehicle dynamics with 3D translation, pitch/yaw attitude, thrust vector control, grid fins and variable mass
 - 🌬️ Realistic environments: atmosphere, drag, wind shear and repeatable gusts
 - 📐 Convex optimization trajectory planning with G-FOLD and SCvx
 - 🎯 Model predictive control for closed-loop tracking and in-flight re-planning
@@ -96,13 +96,16 @@ Guidance never sees the truth model; it plans with the scenario's nominal enviro
 
 ### Attitude constraints
 
-Optional keys in a scenario's `constraints` block:
+Optional keys in a scenario's `constraints` block. Penalties are soft (in fuel-equivalent kg), so they never make a
+plan infeasible.
 
 | Key | Effect |
 |---|---|
-| `constrain_initial_attitude` | Initial thrust direction matches the current body axis |
-| `terminal_cone_deg`, `terminal_frac` | Keeps the final part of the burn near vertical |
-| `max_slew_deg_s` | Rate limit on the planned thrust direction |
+| `constrain_initial_attitude` | First planned thrust direction must match the current body axis |
+| `initial_attitude_tol_deg` | Allowed deviation from the body axis for that first thrust (0 = exact) |
+| `end_tilt_penalty_kg_per_deg`, `end_tilt_nodes` | Penalizes tilt over the final nodes, so the vehicle lands upright |
+| `rotation_rate_penalty` | Penalizes how fast the thrust direction rotates (kg per (deg/s)² per second) |
+| `slack_penalty_kg_per_pct` | Keeps the planned thrust physically achievable when the penalties above are used |
 
 ## License
 
