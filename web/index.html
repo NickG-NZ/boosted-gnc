@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Boosted-GNC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="viewport"></div>
+
+  <aside id="panel">
+    <header class="brand">
+      <span class="logo-mark"></span>
+      <span class="logo">Boosted<span>-GNC</span></span>
+    </header>
+
+    <section id="current" class="current"></section>
+
+    <section class="cases-sec">
+      <div class="sec-head">
+        <h2>Simulations</h2>
+        <label class="toggle" title="Overlay every other run"><input type="checkbox" id="opt-compare" /><span>Compare all</span></label>
+      </div>
+      <div id="cases"></div>
+    </section>
+
+    <section class="display">
+      <h2>Display</h2>
+      <div class="chips">
+        <label class="chip"><input type="checkbox" id="opt-plans" checked /><span>Plan</span></label>
+        <label class="chip"><input type="checkbox" id="opt-replans" checked /><span>Re-plans</span></label>
+        <label class="chip"><input type="checkbox" id="opt-cone" checked /><span>Glide cone</span></label>
+        <label class="chip"><input type="checkbox" id="opt-chase" checked /><span>Chase cam <kbd>C</kbd></span></label>
+      </div>
+      <label class="slider">Rocket scale <input type="range" id="opt-scale" min="1" max="8" step="0.5" value="3" /><span id="opt-scale-val">3×</span></label>
+    </section>
+
+    <footer class="keys muted">
+      <kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> step · <kbd>↑</kbd><kbd>↓</kbd> run · drag orbit · scroll zoom
+    </footer>
+  </aside>
+
+  <div id="right">
+    <div id="hud">
+      <div id="hud-phase" class="phase"></div>
+      <div class="hud-grid">
+        <div><span>T+</span><b id="hud-t">0.00</b><i>s</i></div>
+        <div><span>Altitude</span><b id="hud-alt">0</b><i>m</i></div>
+        <div><span>Vert speed</span><b id="hud-vz">0</b><i>m/s</i></div>
+        <div><span>Horiz speed</span><b id="hud-vh">0</b><i>m/s</i></div>
+        <div><span>Pitch</span><b id="hud-pitch">0</b><i>°</i></div>
+        <div><span>Yaw</span><b id="hud-yaw">0</b><i>°</i></div>
+        <div><span>Throttle</span><b id="hud-thr">0</b><i>%</i></div>
+        <div><span>Fuel left</span><b id="hud-fuel">0</b><i>kg</i></div>
+      </div>
+      <div id="hud-status"></div>
+
+      <div class="gimbal">
+        <div class="gimbal-head">
+          <span>Engine gimbal</span>
+          <span class="gimbal-mag"><b id="g-mag">0.0</b>° <i id="g-max">/ 8°</i></span>
+        </div>
+        <div class="gimbal-body">
+          <canvas id="gimbal-3d"></canvas>
+          <div class="gimbal-side">
+            <canvas id="gimbal-target"></canvas>
+            <div class="gimbal-vals">
+              <div><span>P</span><b id="g-p">0.0</b>°</div>
+              <div><span>Y</span><b id="g-y">0.0</b>°</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="charts">
+      <canvas id="chart-alt"></canvas>
+      <canvas id="chart-thr"></canvas>
+    </div>
+  </div>
+
+  <footer id="timeline">
+    <button id="btn-play" title="Play / pause">▶</button>
+    <button id="btn-restart" title="Restart">⟲</button>
+    <input type="range" id="scrub" min="0" max="1000" value="0" />
+    <span id="time-label">0.00 s</span>
+    <select id="speed" title="Playback speed">
+      <option value="0.25">0.25×</option>
+      <option value="0.5">0.5×</option>
+      <option value="1" selected>1×</option>
+      <option value="2">2×</option>
+      <option value="4">4×</option>
+    </select>
+  </footer>
+
+  <div id="error" hidden></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

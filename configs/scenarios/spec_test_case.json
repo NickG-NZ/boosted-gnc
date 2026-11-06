@@ -1,0 +1,50 @@
+{
+  "name": "Spec section 7 test case",
+  "rocket": "../rockets/booster.json",
+
+  "initial_state": {
+    "m0": 26000.0,
+    "r0": [1500.0, 150.0, -80.0],
+    "v0": [-200.0, -10.0, 5.0]
+  },
+
+  "environment": {
+    "g0": 9.80665,
+    "rho0": 1.225,
+    "H": 8500.0,
+    "wind": [0.0, 0.0, 0.0]
+  },
+
+  "constraints": {
+    "glide_slope_deg": 30.0
+  },
+
+  "gfold": {"N": 40, "n_scan": 25, "n_golden": 20},
+
+  "scvx": {
+    "N": 30, "max_iters": 30, "w_nu": 1e4,
+    "eta0": 1.0, "eta_min": 1e-3, "eta_max": 10.0,
+    "r0": 0.0, "r1": 0.25, "r2": 0.7, "a": 2.0, "b": 3.2,
+    "eps_nu": 1e-6, "eps_x": 1e-4
+  },
+
+  "tracker": {"omega_n": 1.0, "zeta": 0.8, "omega_n_lat": 0.4, "zeta_lat": 0.9, "dt": 0.01},
+
+  "sim_cases": [
+    {"name": "G-FOLD · vacuum", "plan": "gfold", "truth": {"drag": false}},
+    {"name": "G-FOLD · atmosphere (open-loop plan)", "plan": "gfold", "truth": {"drag": true}},
+    {"name": "G-FOLD · atmosphere · re-plan 2 Hz", "plan": "gfold", "truth": {"drag": true}, "replan_hz": 2.0},
+    {"name": "SCvx drag · atmosphere", "plan": "scvx", "truth": {"drag": true}},
+    {
+      "name": "SCvx drag · +20% C_D, 8 m/s wind",
+      "plan": "scvx",
+      "truth": {"drag": true, "cd_scale": 1.2, "wind": [0.0, 0.0, 8.0], "isp_scale": 0.99}
+    },
+    {
+      "name": "SCvx drag · +20% C_D, 8 m/s wind · re-plan 2 Hz",
+      "plan": "scvx",
+      "truth": {"drag": true, "cd_scale": 1.2, "wind": [0.0, 0.0, 8.0], "isp_scale": 0.99},
+      "replan_hz": 2.0
+    }
+  ]
+}

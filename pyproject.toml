@@ -1,0 +1,20 @@
+[project]
+name = "flight-control"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "clarabel>=0.11.1",
+    "cvxpy>=1.9.3",
+    "numpy>=2.5.4",
+    "scipy>=1.18.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+filterwarnings = ["ignore::UserWarning"]

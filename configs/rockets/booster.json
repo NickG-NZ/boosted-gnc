@@ -1,0 +1,31 @@
+{
+  "name": "Generic reusable booster (illustrative)",
+  "m_dry": 22000.0,
+  "isp": 282.0,
+  "T_max": 845000.0,
+  "thr_min": 0.40,
+  "thr_max": 0.90,
+  "thr_min_plan": 0.45,
+  "theta_max_deg": 20.0,
+  "S_ref": 10.5,
+  "C_D": 1.0,
+  "kappa": 1.0,
+  "attitude": {
+    "_doc": "Thrust vector control: nozzle gimbal torques the body (pitch/yaw). Inertia/CG arm held constant.",
+    "gimbal_max_deg": 8.0,
+    "gimbal_rate_deg_s": 30.0,
+    "inertia": 4.0e6,
+    "arm": 14.0,
+    "body_rate_max_deg_s": 12.0,
+    "k_theta": 3.0,
+    "k_omega": 5.0,
+    "fin_alpha_max_deg_s2": 15.0,
+    "brake_frac": 0.5
+  },
+  "geometry": {
+    "length": 42.0,
+    "diameter": 3.7,
+    "n_legs": 4,
+    "n_grid_fins": 4
+  }
+}

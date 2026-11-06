@@ -1,2 +1,90 @@
 # boosted-gnc
-Aerial vehicle simulation and control in Rust
+
+
+3-DOF rocket landing simulator implementing the spec in `powered_descent_guidance_spec.md`:
+
+- **Phase 1 — G-FOLD** (drag-free): lossless convexification, one SOCP per `t_f` + scan/golden-section search.
+- **Phase 2 — SCvx** (with drag, free `t_f`): successive convexification, FOH discretization, trust region, virtual control.
+- **Engine-off coast + ignition timing**: each guidance law predicts the fall with its own model and lights at the
+  latest feasible time (minus a margin).
+- **Closed-loop sim**: truth dynamics (drag, wind, C_D/Isp perturbations) + PD reference tracker, optional re-planning.
+- **3D browser viewer** (three.js): replay, chase cam, plans vs flown paths, re-plans, telemetry, charts.
+
+## Quick start
+
+```bash
+uv sync
+uv run python run.py --serve        # plan + simulate + open the viewer at http://127.0.0.1:8000
+uv run pytest                       # spec §8 acceptance tests
+```
+
+Scenarios: `coast_landing.json` (default — engine-off fall from 4 km, then hoverslam) and `spec_test_case.json`
+(the spec §7 case: engine already lit at 1.5 km, used by the acceptance tests). `run.py <scenario.json>` runs any scenario. Results go to `web/data/results.json`. Open them with
+`--serve`, or serve `web/` yourself (ES modules don't load over `file://`).
+The viewer flies one *selected* case at a time (click a case or press 1–9); "Compare" overlays the others.
+Deep links: `index.html?case=6&t=9.5&chase=0&compare=1&paused=1`.
+
+## Layout
+
+```
+configs/rockets/*.json      vehicle params: mass, Isp, T_max, throttle limits, gimbal cone, S_ref, C_D, geometry
+configs/scenarios/*.json    initial state, environment, glide slope, solver settings, list of sim cases
+landing/
+  vehicle.py     Rocket / Environment / Scenario dataclasses (loaded from JSON)
+  trajectory.py  Trajectory container (ZOH or FOH controls) with continuous-time sampling
+  gfold.py       Phase 1: convex SOCP per t_f, t_f search, tightness checks
+  scvx.py        Phase 2: scaled model + Jacobians, FOH discretization, DPP subproblem, SCvx loop
+  guidance.py    pluggable guidance objects (plan / plan_from / replan) for G-FOLD and SCvx
+  ignition.py    coast prediction + latest-feasible ignition search
+  dynamics.py    truth model (RK4), open-loop re-sim
+  sim.py         closed-loop simulator: tracker, thrust projection, optional re-planning
+web/             three.js viewer: scene.js, rocket3d.js (model built from rocket geometry), charts.js, main.js
+```
+
+Sim cases are defined in the scenario JSON:
+
+```json
+{"name": "...", "plan": "gfold" | "scvx",
+ "truth": {"drag": true, "cd_scale": 1.2, "wind": [0, 0, 8], "isp_scale": 0.99},
+ "replan_hz": 2.0}
+```
+
+## Attitude constraints (`constraints` block of a scenario; all optional)
+
+| key | effect |
+|---|---|
+| `constrain_initial_attitude` | first thrust direction = current body axis (falling engine-first at ignition, actual attitude on re-plans) |
+| `terminal_cone_deg`, `terminal_frac` | final fraction of the burn stays within a narrow vertical cone, so the final descent and touchdown are vertical |
+| `max_slew_deg_s` | planning rate limit on the thrust direction. G-FOLD: exact convex cone *ramps* away from the initial attitude and into the terminal cone. SCvx: linearized rate constraint about each iterate |
+
+The rocket's `max_slew_deg_s` is the actuator limit in the simulator. The body axis is a logged state that slews at
+most this fast, and the viewer draws it. Plan below it (8 vs 12 deg/s) so the tracker has margin.
+
+## Results (`coast_landing.json`)
+
+| Plan | ignites | at altitude | burn | fuel |
+|---|---|---|---|---|
+| G-FOLD (vacuum model) | T+7.4 s | 2265 m | 14.6 s | 3726 kg |
+| SCvx (drag model) | T+12.6 s | 1301 m | 13.3 s | 2840 kg |
+
+G-FOLD thinks the rocket keeps accelerating in free fall, so it lights early. SCvx knows drag holds the rocket near
+terminal velocity, so it waits longer and saves ~25% fuel. Feasible ignition times form a *window*. Too late, and
+max thrust can't stop in time. Too early, and min thrust (> weight, plus drag) stops the rocket high up, where it can't hover.
+
+| Closed-loop case | result |
+|---|---|
+| G-FOLD · vacuum | landed 0.98 m/s, 0.5° tilt |
+| G-FOLD · atmosphere, plan fixed in advance | crash: coast and burn both mispredicted |
+| G-FOLD · atmosphere · re-plan 2 Hz | crash (24 m/s). The drag-unaware plans overshoot sideways, and the slew-limited vehicle can't recover |
+| SCvx · atmosphere | landed 0.86 m/s, 0.5° tilt |
+| SCvx · +20% C_D, 8 m/s wind, plan fixed in advance | crash: the extra coast drag puts it off-plan at ignition |
+| SCvx · +20% C_D, 8 m/s wind · re-plan 2 Hz | landed 1.58 m/s, 0.5° tilt |
+
+The spec §7 case (`spec_test_case.json`, no attitude constraints) reproduces the spec §8 references exactly:
+G-FOLD gives t_f 12.19 s and m_f 23150 kg.
+
+## Simplifications
+
+- Point mass (3-DOF): attitude = thrust direction with a slew-rate limit; no rotational dynamics or torques.
+- Perfect navigation; re-planning is instantaneous (no compute latency modeled).
+- At end of plan the engine cuts. Residual sub-m/s touchdown speed comes from tracker lag.

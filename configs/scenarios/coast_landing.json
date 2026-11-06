@@ -1,0 +1,68 @@
+{
+  "name": "Engine-off fall from 4 km, then hoverslam",
+  "rocket": "../rockets/booster.json",
+
+  "initial_state": {
+    "m0": 26500.0,
+    "r0": [4000.0, 300.0, -160.0],
+    "v0": [-200.0, -12.0, 6.0]
+  },
+
+  "coast": {
+    "_doc": "Start engine-off. Each guidance law predicts the coast with its own model, finds the latest feasible ignition time, then lights margin_s earlier.",
+    "max_coast_s": 60.0,
+    "scan_step_s": 1.0,
+    "resolution_s": 0.1,
+    "margin_s": 1.0
+  },
+
+  "environment": {
+    "g0": 9.80665,
+    "rho0": 1.225,
+    "H": 8500.0,
+    "wind": [0.0, 0.0, 0.0]
+  },
+
+  "constraints": {
+    "glide_slope_deg": 30.0,
+    "constrain_initial_attitude": true,
+    "initial_attitude_tol_deg": 3.0,
+    "end_tilt_penalty_kg_per_deg": 200.0,
+    "end_tilt_nodes": 3,
+    "rotation_rate_penalty": 1.0
+  },
+
+  "gfold": {"N": 40, "n_scan": 25, "n_golden": 20},
+
+  "scvx": {
+    "N": 30, "max_iters": 30, "w_nu": 1e4,
+    "eta0": 1.0, "eta_min": 1e-3, "eta_max": 10.0,
+    "r0": 0.0, "r1": 0.25, "r2": 0.7, "a": 2.0, "b": 3.2,
+    "eps_nu": 1e-6, "eps_x": 1e-4
+  },
+
+  "mpc": {
+    "_doc": "Inner-loop tracking MPC (landing/mpc.py), used by cases with controller = mpc. Weights are per unit^2 (terminal) or per unit^2 per second (running).",
+    "N": 30, "dt0": 0.05, "stop_tgo": 0.15,
+    "w_r_lat": 20.0, "w_r_up": 500.0, "w_v": 20.0, "w_tilt": 3.0e4, "w_rate": 3.0e4, "w_gimbal_term": 1.0e3,
+    "w_dr": 0.02, "w_dv": 0.05, "w_db": 300.0, "w_cone": 1.0e6, "w_ug": 20.0, "w_dT": 1.0,
+    "huber_r": 5.0, "huber_v": 5.0
+  },
+
+  "tracker": {"omega_n": 1.0, "zeta": 0.8, "omega_n_lat": 0.4, "zeta_lat": 0.9, "lateral_fade_s": 2.0, "dt": 0.01},
+
+  "sim_cases": [
+    {"name": "G-FOLD · vacuum · cascade", "plan": "gfold", "truth": {"drag": false}, "controller": "cascade"},
+    {"name": "G-FOLD · vacuum · MPC", "plan": "gfold", "truth": {"drag": false}, "controller": "mpc"},
+    {"name": "G-FOLD · atmosphere (open-loop plan) · cascade", "plan": "gfold", "truth": {"drag": true}, "controller": "cascade"},
+    {"name": "G-FOLD · atmosphere (open-loop plan) · MPC", "plan": "gfold", "truth": {"drag": true}, "controller": "mpc"},
+    {"name": "G-FOLD · atmosphere · re-plan 2 Hz · cascade", "plan": "gfold", "truth": {"drag": true}, "replan_hz": 2.0, "controller": "cascade"},
+    {"name": "G-FOLD · atmosphere · re-plan 2 Hz · MPC", "plan": "gfold", "truth": {"drag": true}, "replan_hz": 2.0, "controller": "mpc"},
+    {"name": "SCvx drag · atmosphere · cascade", "plan": "scvx", "truth": {"drag": true}, "controller": "cascade"},
+    {"name": "SCvx drag · atmosphere · MPC", "plan": "scvx", "truth": {"drag": true}, "controller": "mpc"},
+    {"name": "SCvx drag · +20% C_D, 8 m/s wind · cascade", "plan": "scvx", "truth": {"drag": true, "cd_scale": 1.2, "wind": [0.0, 0.0, 8.0], "isp_scale": 0.99}, "controller": "cascade"},
+    {"name": "SCvx drag · +20% C_D, 8 m/s wind · MPC", "plan": "scvx", "truth": {"drag": true, "cd_scale": 1.2, "wind": [0.0, 0.0, 8.0], "isp_scale": 0.99}, "controller": "mpc"},
+    {"name": "SCvx drag · +20% C_D, 8 m/s wind · re-plan 2 Hz · cascade", "plan": "scvx", "truth": {"drag": true, "cd_scale": 1.2, "wind": [0.0, 0.0, 8.0], "isp_scale": 0.99}, "replan_hz": 2.0, "controller": "cascade"},
+    {"name": "SCvx drag · +20% C_D, 8 m/s wind · re-plan 2 Hz · MPC", "plan": "scvx", "truth": {"drag": true, "cd_scale": 1.2, "wind": [0.0, 0.0, 8.0], "isp_scale": 0.99}, "replan_hz": 2.0, "controller": "mpc"}
+  ]
+}
