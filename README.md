@@ -27,6 +27,9 @@ The goal is to make advanced GNC methods easy to read, run and compare against a
 - 🚀 Vehicle dynamics with 3D translation, pitch/yaw attitude, thrust vector control, grid fins and variable mass
 - 🌬️ Realistic environments: atmosphere, drag, wind shear and repeatable gusts
 - 📐 Convex optimization trajectory planning with G-FOLD and SCvx
+
+
+
 - 🎯 Model predictive control for closed-loop tracking and in-flight re-planning
 - 🧩 Minimal implementations: each algorithm lives in a single, self-contained module
 - 🌐 3D browser visualization for replaying and comparing flights
@@ -37,7 +40,11 @@ The goal is to make advanced GNC methods easy to read, run and compare against a
 SCvx-planned landing with drag, +20% C_D error and gusty wind, tracked by MPC with 2 Hz re-planning
 (click to play):
 
-<a href="docs/landing.mp4"><img src="docs/landing.jpg" alt="Landing replay in the 3D viewer" width="100%"></a>
+
+
+https://github.com/user-attachments/assets/c1ecb7df-4ab0-4165-9dc0-3fc33abc0117
+
+
 
 ## Quick start
 
