@@ -10,16 +10,27 @@
 
 ---
 
-**boosted-gnc** plans, flies and visualizes powered-descent trajectories. It pairs convex-optimization guidance
-with closed-loop control against a truth model that includes drag, wind and model error, then replays every run
-in an interactive 3D viewer.
+## Overview
 
-## Features
+boosted-gnc is two things:
 
-- **High-fidelity 6-DOF vehicle simulation** with aerodynamics, wind and thrust vector control
-- **Convex optimization trajectory planning** using G-FOLD and SCvx
-- **Model predictive control** for closed-loop trajectory tracking
-- **3D browser visualization** for replaying and comparing flights
+1. **A simulation environment.** A fast, modular flight simulator written in Rust, covering vehicle dynamics,
+   environment models and telemetry.
+2. **A library of modern flight control.** Minimal, readable implementations of state-of-the-art
+   optimization-based guidance and control for aircraft and rocket landing.
+
+The goal is to make advanced GNC methods easy to read, run and compare against a realistic model of the world.
+
+## Highlights
+
+- 🦀 Fast, modular simulation engine written in Rust, with Python bindings
+- 🚀 High-fidelity 6-DOF vehicle dynamics with thrust vector control, grid fins and variable mass
+- 🌬️ Realistic environments: atmosphere, drag, wind shear and repeatable gusts
+- 📐 Convex optimization trajectory planning with G-FOLD and SCvx
+- 🎯 Model predictive control for closed-loop tracking and in-flight re-planning
+- 🧩 Minimal implementations: each algorithm lives in a single, self-contained module
+- 🌐 3D browser visualization for replaying and comparing flights
+- ⚙️ Vehicles and scenarios defined in plain JSON
 
 ## Quick start
 
