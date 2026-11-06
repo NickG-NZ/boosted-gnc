@@ -36,10 +36,10 @@ from dataclasses import dataclass, field
 import cvxpy as cp
 import numpy as np
 
-from .attitude import AttitudeParams, AttitudeState
-from .dynamics import TruthModel
-from .trajectory import Trajectory
-from .vehicle import Scenario
+from gnc.control.attitude import AttitudeParams, AttitudeState
+from gnc.dynamics import TruthModel
+from gnc.guidance.trajectory import Trajectory
+from gnc.vehicle import Scenario
 
 NX, NU = 12, 3
 IR, IV, IB, IS, IG = slice(0, 3), slice(3, 6), slice(6, 8), slice(8, 10), slice(10, 12)

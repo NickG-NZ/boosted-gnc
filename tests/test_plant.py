@@ -7,9 +7,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from landing.plant import make_plant
-from landing.sim import truth_from_case
-from landing.vehicle import Scenario
+from gnc.plant import make_plant
+from gnc.sim import truth_from_case
+from gnc.vehicle import Scenario
 
 CFG = Path(__file__).resolve().parents[1] / "missions/coast_landing/scenario.json"
 CHANNELS = {"t", "r", "v", "m", "b", "w", "g", "thrust", "wind"}

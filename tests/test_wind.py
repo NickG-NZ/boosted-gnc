@@ -1,10 +1,10 @@
-"""Truth wind model (landing/wind.py)."""
+"""Truth wind model (gnc/wind.py)."""
 
 from __future__ import annotations
 
 import numpy as np
 
-from landing.wind import WindModel
+from gnc.wind import WindModel
 
 
 def test_constant_config_is_unchanged():

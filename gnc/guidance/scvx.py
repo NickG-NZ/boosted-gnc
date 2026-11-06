@@ -11,9 +11,9 @@ from dataclasses import dataclass, replace
 import cvxpy as cp
 import numpy as np
 
-from .gfold import attitude_penalties, check_solution
-from .trajectory import Trajectory
-from .vehicle import Scenario
+from gnc.guidance.gfold import attitude_penalties, check_solution
+from gnc.guidance.trajectory import Trajectory
+from gnc.vehicle import Scenario
 
 SOLVER = cp.CLARABEL
 

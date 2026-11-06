@@ -1,7 +1,7 @@
 # sim: Rust simulation engine
 
 The truth model of the closed-loop sim. Flight software (guidance and control, currently Python in
-`landing/`) drives it through actuator commands. The controller moves into Rust later. The
+`gnc/`) drives it through actuator commands. The controller moves into Rust later. The
 three.js viewer in `web/` stays as is and reads the outputs.
 
 ## Crates
@@ -35,7 +35,7 @@ Telemetry row `k` is the state at the start of step `k` plus the thrust applied 
 
 `PlantConfig` (JSON, `crates/sim-vehicle/src/config.rs`) is the contract with whatever builds a
 scenario: `vehicle`, `environment` (tagged `type` per model), `dispersions` (truth vs. nominal:
-`drag`, `cd_scale`, `isp_scale`), `initial`. Today `landing/plant.py:plant_config` builds it from
+`drag`, `cd_scale`, `isp_scale`), `initial`. Today `gnc/plant.py:plant_config` builds it from
 the JSON scenarios. Gust profiles are passed as tables, so runs are repeatable and match the Python
 `WindModel` exactly.
 

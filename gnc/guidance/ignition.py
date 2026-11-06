@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from .dynamics import TruthModel
-from .trajectory import Trajectory
-from .vehicle import Scenario
+from gnc.dynamics import TruthModel
+from gnc.guidance.trajectory import Trajectory
+from gnc.vehicle import Scenario
 
 
 def coast_propagate(model: TruthModel, s0: np.ndarray, t_max: float, dt: float = 0.05,

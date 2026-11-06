@@ -1,7 +1,7 @@
 # Missions
 
 One folder per mission, each with a `scenario.json` (initial state, environment, constraints, solver
-settings, sim cases). Vehicles are shared from `vehicles/`; the GNC code (`landing/`) and the Rust sim
+settings, sim cases). Vehicles are shared from `vehicles/`; the GNC code (`gnc/`) and the Rust sim
 engine (`sim/`) are shared by all missions.
 
 | Mission | |

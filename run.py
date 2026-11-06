@@ -23,11 +23,11 @@ from pathlib import Path
 
 import numpy as np
 
-from landing.dynamics import TruthModel, open_loop_resim
-from landing.guidance import GFoldGuidance, SCvxGuidance
-from landing.ignition import plan_with_ignition
-from landing.sim import simulate, truth_from_case
-from landing.vehicle import Scenario
+from gnc.dynamics import TruthModel, open_loop_resim
+from gnc.guidance.guidance import GFoldGuidance, SCvxGuidance
+from gnc.guidance.ignition import plan_with_ignition
+from gnc.sim import simulate, truth_from_case
+from gnc.vehicle import Scenario
 
 warnings.filterwarnings("ignore", message="Solution may be inaccurate")
 

@@ -21,10 +21,10 @@ from typing import Any
 import boosted_sim
 import numpy as np
 
-from .attitude import AttitudeParams, AttitudeState
-from .dynamics import TruthModel
-from .vehicle import Scenario
-from .wind import H_FLOOR
+from gnc.control.attitude import AttitudeParams, AttitudeState
+from gnc.dynamics import TruthModel
+from gnc.vehicle import Scenario
+from gnc.wind import H_FLOOR
 
 
 @dataclass(frozen=True)

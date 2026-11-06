@@ -12,8 +12,8 @@ import cvxpy as cp
 import numpy as np
 from scipy.linalg import expm
 
-from .trajectory import Trajectory
-from .vehicle import Scenario
+from gnc.guidance.trajectory import Trajectory
+from gnc.vehicle import Scenario
 
 SOLVER = cp.CLARABEL
 

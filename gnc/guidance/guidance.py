@@ -15,10 +15,10 @@ from dataclasses import replace
 
 import numpy as np
 
-from . import gfold
-from .scvx import SCvxSolver
-from .trajectory import Trajectory
-from .vehicle import Scenario
+from gnc.guidance import gfold
+from gnc.guidance.scvx import SCvxSolver
+from gnc.guidance.trajectory import Trajectory
+from gnc.vehicle import Scenario
 
 
 def shift_trajectory(prev: Trajectory, tau: float, n: int | None = None) -> Trajectory:

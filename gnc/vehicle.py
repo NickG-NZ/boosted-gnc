@@ -53,7 +53,7 @@ class Rocket:
     C_D: float = 0.0
     kappa: float = 1.0  # C_D multiplier while thrusting (plume shielding)
     thr_min_plan: float | None = None  # planning floor (> thr_min leaves throttle-down margin)
-    attitude: dict[str, Any] | None = None  # gimbal/TVC params, see landing/attitude.py
+    attitude: dict[str, Any] | None = None  # gimbal/TVC params, see gnc/control/attitude.py
     geometry: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -126,7 +126,7 @@ class Scenario:
     coast: dict[str, Any] = field(default_factory=dict)  # empty -> engine lit at t=0
     constraints: dict[str, Any] = field(default_factory=dict)  # optional attitude constraints
     att0: np.ndarray | None = None  # current body/thrust axis (overrides the default below)
-    mpc: dict[str, Any] = field(default_factory=dict)  # inner-loop MPC params, see landing/mpc.py
+    mpc: dict[str, Any] = field(default_factory=dict)  # inner-loop MPC params, see gnc/control/mpc.py
 
     @property
     def gamma_gs(self) -> float:

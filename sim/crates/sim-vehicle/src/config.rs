@@ -1,5 +1,5 @@
 //! Plant configuration (serde). This is the contract between whatever builds a scenario (today
-//! the Python `landing.plant` module, later a Rust scenario loader) and the sim.
+//! the Python `gnc.plant` module, later a Rust scenario loader) and the sim.
 
 use serde::Deserialize;
 use sim_env::EnvironmentConfig;

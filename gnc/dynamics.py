@@ -6,8 +6,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .vehicle import Environment, Rocket
-from .wind import WindModel
+from gnc.vehicle import Environment, Rocket
+from gnc.wind import WindModel
 
 
 @dataclass(frozen=True)

@@ -8,13 +8,13 @@ import numpy as np
 import pytest
 from scipy.linalg import expm
 
-from landing import gfold, scvx
-from landing.dynamics import TruthModel, open_loop_resim
-from landing.guidance import GUIDANCE, SCvxGuidance
-from landing.ignition import plan_with_ignition
-from landing.mpc import NU, NX, continuous_model, discretize
-from landing.sim import project_thrust, simulate, truth_from_case
-from landing.vehicle import Scenario
+from gnc.control.mpc import NU, NX, continuous_model, discretize
+from gnc.dynamics import TruthModel, open_loop_resim
+from gnc.guidance import gfold, scvx
+from gnc.guidance.guidance import GUIDANCE, SCvxGuidance
+from gnc.guidance.ignition import plan_with_ignition
+from gnc.sim import project_thrust, simulate, truth_from_case
+from gnc.vehicle import Scenario
 
 MISSIONS = Path(__file__).resolve().parents[1] / "missions"
 CFG = MISSIONS / "spec_test_case/scenario.json"

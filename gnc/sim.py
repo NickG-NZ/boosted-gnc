@@ -15,13 +15,13 @@ from typing import Any
 
 import numpy as np
 
-from .attitude import AttitudeModel, AttitudeParams, AttitudeState, ReferenceModel
-from .dynamics import TruthModel
-from .mpc import TrackingMPC, embed_gimbal
-from .plant import StepInfo, make_plant
-from .trajectory import Trajectory
-from .vehicle import E1, Scenario
-from .wind import WindModel
+from gnc.control.attitude import AttitudeModel, AttitudeParams, AttitudeState, ReferenceModel
+from gnc.control.mpc import TrackingMPC, embed_gimbal
+from gnc.dynamics import TruthModel
+from gnc.guidance.trajectory import Trajectory
+from gnc.plant import StepInfo, make_plant
+from gnc.vehicle import E1, Scenario
+from gnc.wind import WindModel
 
 
 def max_rate(t: np.ndarray, att: np.ndarray) -> float:
@@ -110,7 +110,7 @@ def simulate(
     ignition and then at that rate until t_go < freeze_tgo, then hold the last plan.
     `probe(signals: dict)` is called every powered control step with every intermediate signal.
     `controller`: "cascade" (PD tracker -> reference model -> attitude loop -> gimbal) or
-    "mpc" (attitude-aware tracking MPC commanding throttle and gimbal directly, landing/mpc.py).
+    "mpc" (attitude-aware tracking MPC commanding throttle and gimbal directly, gnc/control/mpc.py).
     `telemetry_path`: write the plant's telemetry artifact there."""
     rk = sc.rocket
     cfg = {"omega_n": 1.0, "zeta": 0.7, "dt": 0.01, **sc.tracker}
