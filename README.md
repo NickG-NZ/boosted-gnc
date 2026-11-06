@@ -16,15 +16,10 @@ in an interactive 3D viewer.
 
 ## Features
 
-- **Optimal guidance**: G-FOLD (lossless convexification) for vacuum, and SCvx (successive convexification) for
-  free-final-time trajectories with aerodynamic drag.
-- **Ignition timing**: predicts the unpowered coast and lights the engine at the latest feasible moment.
-- **Closed-loop control**: a cascaded PD/attitude controller or a tracking MPC, both driving throttle and engine
-  gimbal, with optional in-flight re-planning.
-- **Truth simulation**: RK4 dynamics with pitch/yaw attitude, thrust vector control, drag, altitude-sheared wind
-  with seeded gusts, and C_D / Isp perturbations.
-- **3D viewer**: browser-based replay with chase camera, planned vs. flown paths, telemetry, charts and run
-  comparison.
+- **High-fidelity 6-DOF vehicle simulation** with aerodynamics, wind and thrust vector control
+- **Convex optimization trajectory planning** using G-FOLD and SCvx
+- **Model predictive control** for closed-loop trajectory tracking
+- **3D browser visualization** for replaying and comparing flights
 
 ## Quick start
 
