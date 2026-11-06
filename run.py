@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import http.server
 import json
+import shutil
 import subprocess
 import sys
 import threading
@@ -138,8 +139,24 @@ class SolveJob:
                 self.state["error"] = "cancelled" if rc < 0 else ("\n".join(tail) or f"solver exited with code {rc}")
 
 
+def build_viewer(web: Path) -> None:
+    """Compile the TypeScript viewer (web/src -> web/js) when the build is missing or stale."""
+    out = web / "js" / "main.js"
+    sources = [*(web / "src").glob("*.ts"), web / "tsconfig.json", web / "package.json"]
+    if out.exists() and out.stat().st_mtime >= max(p.stat().st_mtime for p in sources):
+        return
+    if shutil.which("npm") is None:
+        raise SystemExit("The viewer is TypeScript and needs building: install Node.js (npm), then run\n"
+                         "  cd web && npm install && npm run build")
+    print("Building viewer (web/src -> web/js)...")
+    if not (web / "node_modules").exists():
+        subprocess.run(["npm", "install", "--no-audit", "--no-fund"], cwd=web, check=True)
+    subprocess.run(["npm", "run", "--silent", "build"], cwd=web, check=True)
+
+
 def serve(port: int, data_path: Path, scenario: str) -> None:
     web = Path(__file__).resolve().parent / "web"
+    build_viewer(web)
     rel = data_path.resolve().relative_to(web).as_posix()
     job = SolveJob(scenario, data_path)
 

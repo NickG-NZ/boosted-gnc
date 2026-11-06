@@ -1,18 +1,40 @@
-import { TimeChart } from "./charts.js";
+import { type Series, TimeChart, type TimeChartOptions } from "./charts.js";
+import type { Metrics, Plan, Rocket, Scenario, Sim, Wind } from "./types.js";
 import { gimbalAt, gimbalPY, pitchYaw } from "./util.js";
 
-const PLAN_LABEL = { gfold: "G-FOLD (no drag model)", scvx: "SCvx (drag model)" };
-const f = (v, d = 2) => (v == null || Number.isNaN(v) ? "—" : typeof v === "number" ? v.toFixed(d) : String(v));
-const row = (k, v, u = "") => `<div class="kv"><span>${k}</span><b>${v}</b>${u ? `<i>${u}</i>` : ""}</div>`;
-const card = (title, body, cls = "") => `<section class="dcard ${cls}"><h3>${title}</h3>${body}</section>`;
+/** Badge class ("good" | "warn" | "bad") and label for a run's outcome. */
+export type Verdict = [cls: string, label: string];
+
+/** What the details report needs to know about one run. */
+export interface DetailsCase {
+  sim: Sim;
+  planData: Plan | undefined;
+  color: string;
+  ctrl: string;
+}
+
+export interface DetailsContext {
+  rocket: Rocket;
+  scenario: Scenario;
+  verdict: (m: Metrics) => Verdict;
+  describe: (m: Metrics) => string;
+  windSummary: (w: Wind | undefined) => string | null;
+}
+
+type ChartId = "alt" | "spd" | "thr" | "att" | "gim" | "mass" | "wind";
+
+const PLAN_LABEL: Record<string, string> = { gfold: "G-FOLD (no drag model)", scvx: "SCvx (drag model)" };
+const f = (v: unknown, d = 2): string => (v == null || Number.isNaN(v) ? "—" : typeof v === "number" ? v.toFixed(d) : String(v));
+const row = (k: string, v: string | number, u = "") => `<div class="kv"><span>${k}</span><b>${v}</b>${u ? `<i>${u}</i>` : ""}</div>`;
+const card = (title: string, body: string, cls = "") => `<section class="dcard ${cls}"><h3>${title}</h3>${body}</section>`;
 
 /** Full report for one run: configuration, outcome, guidance plan, control effort, time histories. */
-export function renderDetails(el, c, { rocket, scenario, verdict, describe, windSummary }) {
+export function renderDetails(el: HTMLElement, c: DetailsCase, { rocket, scenario, verdict, describe, windSummary }: DetailsContext): void {
   const sim = c.sim, m = sim.metrics, p = c.planData, pi = p?.info ?? {};
   const tr = m.truth || {};
   const [cls, label] = verdict(m);
   const vtd = Math.hypot(m.touchdown_vert_speed, m.touchdown_horiz_speed);
-  const fuelPlan = p ? scenario.m0 - p.m.at(-1) : null;
+  const fuelPlan = p ? scenario.m0 - p.m[p.m.length - 1] : null;
   const solved = sim.solved_at ?? null;
 
   const config = [
@@ -43,7 +65,7 @@ export function renderDetails(el, c, { rocket, scenario, verdict, describe, wind
     row("Ignition", `T+${f(pi.t_ignition)}`, "s"),
     row("Latest feasible", `T+${f(pi.t_latest_ignition)}`, "s"),
     row("Ignition altitude", f(p.r[0][0], 0), "m"),
-    row("Burn time (t_f)", f(p.t.at(-1)), "s"),
+    row("Burn time (t_f)", f(p.t[p.t.length - 1]), "s"),
     row("Planned fuel", f(fuelPlan, 0), "kg"),
     row("Nodes", pi.N ?? "—"),
     m.plan === "gfold" ? row("t_f search", `${pi.n_solves ?? "—"} SOCPs`) : row("SCvx iterations", `${pi.iterations ?? "—"} · ${pi.converged ? "converged" : "not converged"}`),
@@ -67,10 +89,10 @@ export function renderDetails(el, c, { rocket, scenario, verdict, describe, wind
   const all = Object.entries(m).filter(([, v]) => typeof v !== "object")
     .map(([k, v]) => `<tr><td>${k}</td><td>${typeof v === "number" ? (Math.abs(v) < 1e-3 && v !== 0 ? v.toExponential(2) : +v.toFixed(4)) : v}</td></tr>`).join("");
 
-  const charts = [
+  const charts: [ChartId, string, string][] = [
     ["alt", "Altitude", "m"], ["spd", "Speed: vertical — / horizontal - -", "m/s"], ["thr", "Throttle", "% T_max"],
     ["att", "Attitude: pitch — / yaw - -", "°"], ["gim", "Gimbal: pitch — / yaw - -", "°"], ["mass", "Mass", "kg"],
-    ...(sim.wind ? [["wind", "Wind at vehicle: y — / x - - / up (faint)", "m/s"]] : []),
+    ...(sim.wind ? [["wind", "Wind at vehicle: y — / x - - / up (faint)", "m/s"] as [ChartId, string, string]] : []),
   ];
 
   el.innerHTML = `
@@ -90,26 +112,30 @@ export function renderDetails(el, c, { rocket, scenario, verdict, describe, wind
 
   // time histories
   const t = sim.t, col = c.color, N = t.length;
-  const py = sim.att ? sim.att.map(pitchYaw) : null;
-  const gpy = sim.att ? t.map((_, k) => (sim.throttle[k] > 0.01 ? gimbalPY(gimbalAt(sim, k), sim.att[k]) : [0, 0])) : null;
+  const att = sim.att;
+  const py = att ? att.map(pitchYaw) : null;
+  const gpy = att ? t.map((_, k) => (sim.throttle[k] > 0.01 ? gimbalPY(gimbalAt(sim, k), att[k]) : [0, 0])) : null;
   const tMax = t[N - 1] + 0.5;
-  const series = {
+  const wind = sim.wind;
+  const series: Record<ChartId, Series[]> = {
     alt: [{ t, y: sim.r.map((r) => r[0]), color: col, width: 1.8 }],
     spd: [{ t, y: sim.v.map((v) => -v[0]), color: col, width: 1.8 }, { t, y: sim.v.map((v) => Math.hypot(v[1], v[2])), color: col, width: 1.5, dashed: true }],
     thr: [{ t, y: sim.throttle.map((x) => 100 * x), color: col, width: 1.6 }],
     att: py ? [{ t, y: py.map((a) => a[0]), color: col, width: 1.6 }, { t, y: py.map((a) => a[1]), color: col, width: 1.4, dashed: true }] : [],
     gim: gpy ? [{ t, y: gpy.map((a) => a[0]), color: col, width: 1.4 }, { t, y: gpy.map((a) => a[1]), color: col, width: 1.2, dashed: true }] : [],
     mass: [{ t, y: sim.m, color: col, width: 1.8 }],
-    wind: sim.wind ? [{ t, y: sim.wind.map((w) => w[2]), color: col, width: 1.6 }, { t, y: sim.wind.map((w) => w[1]), color: col, width: 1.4, dashed: true }, { t, y: sim.wind.map((w) => w[0]), color: col, width: 1, dashed: true, alpha: 0.5 }] : [],
+    wind: wind ? [{ t, y: wind.map((w) => w[2]), color: col, width: 1.6 }, { t, y: wind.map((w) => w[1]), color: col, width: 1.4, dashed: true }, { t, y: wind.map((w) => w[0]), color: col, width: 1, dashed: true, alpha: 0.5 }] : [],
   };
   const gmax = rocket.attitude?.gimbal_max_deg ?? 8;
-  const opts = {
+  const opts: Record<ChartId, Partial<TimeChartOptions>> = {
     alt: { yMin: 0 }, spd: { yMin: 0 }, thr: { yMin: 0, yMax: 105, bands: [{ y: rocket.thr_min * 100, label: "min" }] },
     att: {}, wind: {}, gim: { yMin: -gmax * 1.1, yMax: gmax * 1.1, bands: [{ y: gmax, label: `+${gmax}°` }, { y: -gmax, label: `−${gmax}°` }] }, mass: {},
   };
   const ign = m.t_ignition;
   for (const [id, title, unit] of charts) {
-    const ch = new TimeChart(el.querySelector(`[data-chart="${id}"]`), { title, unit, cursor: null, ...opts[id] });
+    const canvas = el.querySelector<HTMLCanvasElement>(`[data-chart="${id}"]`);
+    if (!canvas) continue;
+    const ch = new TimeChart(canvas, { title, unit, cursor: null, ...opts[id] });
     ch.markers = ign > 0 ? [{ t: ign, label: "ignition" }] : [];
     ch.setSeries(series[id], tMax);
   }

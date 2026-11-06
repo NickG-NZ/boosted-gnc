@@ -2,23 +2,37 @@ import * as THREE from "three";
 import { Line2 } from "three/addons/lines/Line2.js";
 import { LineGeometry } from "three/addons/lines/LineGeometry.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
-import { createWorld } from "./scene.js";
+import { type Series, TimeChart } from "./charts.js";
+import { type DetailsCase, renderDetails, type Verdict } from "./details.js";
+import { GimbalTarget, GimbalView } from "./gimbal.js";
 import { Rocket3D } from "./rocket3d.js";
-import { TimeChart } from "./charts.js";
-import { GimbalView, GimbalTarget } from "./gimbal.js";
-import { renderDetails } from "./details.js";
-import { CASE_COLORS, toThree, sampleSim, norm, gimbalPY, pitchYaw } from "./util.js";
+import { createWorld, canvas2d } from "./scene.js";
+import type { Metrics, Replan, Results, Sim, SolverStatus, Vec3, Wind } from "./types.js";
+import { CASE_COLORS, gimbalPY, norm, pitchYaw, sampleSim, type SimSample, toThree } from "./util.js";
 
-const $ = (id) => document.getElementById(id);
+/** Element by id; throws if the page markup is missing it. */
+function $<T extends HTMLElement = HTMLElement>(id: string): T {
+  const el = document.getElementById(id);
+  if (!el) throw new Error(`missing #${id}`);
+  return el as T;
+}
 
-async function loadData() {
+async function loadData(): Promise<Results> {
   const url = new URLSearchParams(location.search).get("data") || "data/results.json";
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`Could not load ${url} (${res.status}). Run: uv run python run.py`);
-  return res.json();
+  return res.json() as Promise<Results>;
 }
 
-function fatLine(points, color, { width = 2, dashed = false, dash = 18, gap = 12, opacity = 1 } = {}) {
+interface FatLineOptions {
+  width?: number;
+  dashed?: boolean;
+  dash?: number;
+  gap?: number;
+  opacity?: number;
+}
+
+function fatLine(points: THREE.Vector3[], color: string, { width = 2, dashed = false, dash = 18, gap = 12, opacity = 1 }: FatLineOptions = {}): Line2 {
   const geo = new LineGeometry();
   geo.setPositions(points.flatMap((p) => [p.x, p.y, p.z]));
   const mat = new LineMaterial({
@@ -31,13 +45,13 @@ function fatLine(points, color, { width = 2, dashed = false, dash = 18, gap = 12
 }
 
 /** Smooth a coarse node path (guidance nodes) for display. */
-const smoothPath = (nodes, n = 200) => new THREE.CatmullRomCurve3(nodes.map(toThree)).getPoints(n);
+const smoothPath = (nodes: Vec3[], n = 200) => new THREE.CatmullRomCurve3(nodes.map(toThree)).getPoints(n);
 
 /** Numbered disc sprite used to mark other cases' rockets when comparing. */
-function labelSprite(text, color) {
+function labelSprite(text: string, color: string): THREE.Sprite {
   const c = document.createElement("canvas");
   c.width = 64; c.height = 64;
-  const g = c.getContext("2d");
+  const g = canvas2d(c);
   g.fillStyle = color;
   g.beginPath(); g.arc(32, 32, 28, 0, Math.PI * 2); g.fill();
   g.fillStyle = "#06080c";
@@ -51,7 +65,7 @@ function labelSprite(text, color) {
   return s;
 }
 
-function verdict(m) {
+function verdict(m: Metrics): Verdict {
   if (!m.landed) return ["bad", "no touchdown"];
   const v = Math.hypot(m.touchdown_vert_speed, m.touchdown_horiz_speed);
   if (v < 2 && m.touchdown_pos_err_m < 2) return ["good", `landed ${v.toFixed(2)} m/s`];
@@ -59,43 +73,50 @@ function verdict(m) {
   return ["bad", `crash ${v.toFixed(0)} m/s`];
 }
 
-const PLAN_NAMES = { gfold: "G-FOLD (no drag model)", scvx: "SCvx (drag model)" };
+const PLAN_NAMES: Record<string, string> = { gfold: "G-FOLD (no drag model)", scvx: "SCvx (drag model)" };
 
-const CTRL_NAMES = { mpc: "MPC", cascade: "Cascade" };
+const CTRL_NAMES: Record<string, string> = { mpc: "MPC", cascade: "Cascade" };
 
 /** Split "Scenario · details · controller" into a group label and the controller label. */
-function splitName(sim) {
+function splitName(sim: Sim): { base: string; ctrl: string } {
   const ctrl = sim.metrics.controller;
   let base = sim.name;
   const parts = base.split(" · ");
-  if (ctrl && parts.length > 1 && parts.at(-1).toLowerCase() === ctrl.toLowerCase()) base = parts.slice(0, -1).join(" · ");
-  return { base, ctrl: CTRL_NAMES[ctrl] ?? ctrl ?? "run" };
+  if (ctrl && parts.length > 1 && parts[parts.length - 1].toLowerCase() === ctrl.toLowerCase()) base = parts.slice(0, -1).join(" · ");
+  return { base, ctrl: (ctrl && CTRL_NAMES[ctrl]) ?? ctrl ?? "run" };
+}
+
+interface Tag {
+  t: string;
+  k?: string;
 }
 
 /** Tags for a run: controller, plus re-planning when on. Guidance/environment are in the title. */
-function runTags(m, ctrl) {
-  const tags = [{ t: ctrl, k: "ctrl" }];
+function runTags(m: Metrics, ctrl: string): Tag[] {
+  const tags: Tag[] = [{ t: ctrl, k: "ctrl" }];
   if (m.replan_hz) tags.push({ t: `Re-plan ${m.replan_hz} Hz` });
   return tags;
 }
-const tagHtml = (tags) => tags.map((g) => `<span class="tag${g.k ? ` ${g.k}` : ""}">${g.t}</span>`).join("");
+const tagHtml = (tags: Tag[]) => tags.map((g) => `<span class="tag${g.k ? ` ${g.k}` : ""}">${g.t}</span>`).join("");
 
 /** Short text for a case's truth wind: constant [x,y,z] or the shear+gust model (sim/crates/sim-env/src/wind.rs). */
-function windSummary(w) {
+function windSummary(w: Wind | undefined): string | null {
   if (!w) return null;
-  const mean = Array.isArray(w) ? w : w.mean ?? [0, 0, 0];
-  const v = Math.hypot(...mean);
-  if (Array.isArray(w)) return v ? `wind ${v.toFixed(0)} m/s` : null;
+  if (Array.isArray(w)) {
+    const v = norm(w);
+    return v ? `wind ${v.toFixed(0)} m/s` : null;
+  }
+  const v = norm(w.mean ?? [0, 0, 0]);
   const parts = [`wind ${v.toFixed(0)} m/s @ ${w.ref_alt ?? 10} m`];
   if (w.shear) parts.push(`shear ^${w.shear}`);
   if (w.gust_sigma) parts.push(`gusts σ ${w.gust_sigma} m/s`);
   return parts.join(", ");
 }
 
-function describe(m) {
+function describe(m: Metrics): string {
   const tr = m.truth || {};
   let truth = tr.drag === false ? "vacuum" : "atmosphere";
-  const pert = [];
+  const pert: string[] = [];
   if (tr.cd_scale && tr.cd_scale !== 1) pert.push(`C_D ×${tr.cd_scale}`);
   const wind = windSummary(tr.wind);
   if (wind) pert.push(wind);
@@ -105,29 +126,54 @@ function describe(m) {
   return `Plan: ${PLAN_NAMES[m.plan] ?? m.plan} · Truth: ${truth} · ${loop}`;
 }
 
-async function main() {
+interface ReplanLine extends Replan {
+  line: Line2;
+}
+
+/** One simulation run with its scene objects and panel row. */
+interface Case extends DetailsCase {
+  flown: Line2;
+  planGroup: THREE.Group;
+  replanGroup: THREE.Group;
+  replanLines: ReplanLine[];
+  ignition: THREE.Mesh | null;
+  marker: THREE.Sprite;
+  tEnd: number;
+  base: string;
+  index: number;
+  tags: Tag[];
+  rowHtml: string;
+  el: HTMLButtonElement;
+}
+
+type Tab = "view" | "details";
+
+async function main(): Promise<void> {
   const data = await loadData();
   const { scenario, rocket, plans, sims } = data;
   const h0 = scenario.r0[0];
   const world = createWorld($("viewport"), { glideSlopeDeg: scenario.glide_slope_deg, coneHeight: Math.max(1800, h0 * 1.1) });
   const { scene, camera, controls, renderer } = world;
-  const lineMats = [];
-  const track = (...ls) => ls.forEach((l) => lineMats.push(l.material));
+  const lineMats: LineMaterial[] = [];
+  const track = (...ls: Line2[]) => ls.forEach((l) => lineMats.push(l.material));
 
   // ---------------------------------------------------------------- per-case scene objects
-  const cases = sims.map((sim, i) => {
+  const cases: Case[] = sims.map((sim, i) => {
     const color = CASE_COLORS[i % CASE_COLORS.length];
     const m = sim.metrics;
     const planData = sim.plan ?? plans[m.plan]; // each run carries the plan it flew
     const flown = fatLine(sim.r.map(toThree), color, { width: 2.5 });
     const planGroup = new THREE.Group();
     // predicted coast (guidance's own model) dotted, then the burn plan dashed
-    if (planData.info.coast && planData.info.coast.r.length > 1) {
-      const coast = fatLine(planData.info.coast.r.map(toThree), color, { width: 1.5, dashed: true, dash: 4, gap: 14, opacity: 0.6 });
+    const coastPath = planData?.info.coast;
+    if (coastPath && coastPath.r.length > 1) {
+      const coast = fatLine(coastPath.r.map(toThree), color, { width: 1.5, dashed: true, dash: 4, gap: 14, opacity: 0.6 });
       planGroup.add(coast); track(coast);
     }
-    const burn = fatLine(smoothPath(planData.r), color, { width: 1.5, dashed: true, opacity: 0.6 });
-    planGroup.add(burn); track(burn);
+    if (planData) {
+      const burn = fatLine(smoothPath(planData.r), color, { width: 1.5, dashed: true, opacity: 0.6 });
+      planGroup.add(burn); track(burn);
+    }
 
     const replanGroup = new THREE.Group();
     const replanLines = (sim.replans || []).map((rp) => {
@@ -137,7 +183,7 @@ async function main() {
     });
 
     // ignition marker: ring at the true position where the engine lit
-    let ignition = null;
+    let ignition: THREE.Mesh | null = null;
     if (m.t_ignition > 0) {
       const k = sim.t.findIndex((tt) => tt >= m.t_ignition - 1e-6);
       ignition = new THREE.Mesh(new THREE.TorusGeometry(14, 2.2, 8, 32), new THREE.MeshBasicMaterial({ color: "#ff9a4d" }));
@@ -150,23 +196,26 @@ async function main() {
     marker.scale.setScalar(0.035);
     track(flown);
     scene.add(flown, planGroup, replanGroup, marker);
-    return { sim, color, planData, flown, planGroup, replanGroup, replanLines, ignition, marker, tEnd: sim.t.at(-1) };
+    // panel fields (base, ctrl, el, ...) are filled in when the run rows are built below
+    return {
+      sim, color, planData, flown, planGroup, replanGroup, replanLines, ignition, marker, tEnd: sim.t[sim.t.length - 1],
+    } as Case;
   });
 
   const rocket3d = new Rocket3D(rocket.geometry);
   const gimbalMax = rocket.attitude?.gimbal_max_deg ?? rocket.gimbal_max_deg ?? 8;
-  const gimbalView = new GimbalView($("gimbal-3d"), gimbalMax);
-  const gimbalTarget = new GimbalTarget($("gimbal-target"), gimbalMax);
+  const gimbalView = new GimbalView($<HTMLCanvasElement>("gimbal-3d"), gimbalMax);
+  const gimbalTarget = new GimbalTarget($<HTMLCanvasElement>("gimbal-target"), gimbalMax);
   $("g-max").textContent = `/ ${gimbalMax}°`;
   // exaggerated flame level: 0 at the engine floor, 1 at full thrust (throttle spans ~0.4-0.9)
   const thrLo = (rocket.thr_min ?? 0.4) * 0.9;
-  const flameLevel = (thr) => Math.min(1, Math.max(0, (thr - thrLo) / (1 - thrLo)));
+  const flameLevel = (thr: number) => Math.min(1, Math.max(0, (thr - thrLo) / (1 - thrLo)));
   scene.add(rocket3d.group);
 
   const tMax = Math.max(...cases.map((c) => c.tEnd)) + 0.5;
   let selected = Math.max(0, cases.findIndex((c) => c.sim.metrics.plan === "scvx"));
   let t = 0, playing = true, speed = 1, chase = false;
-  let tab = "view", detailsFor = -1;
+  let tab: Tab = "view", detailsFor = -1;
 
   // ---------------------------------------------------------------- tabs: 3D view | details
   function showDetails() {
@@ -174,17 +223,17 @@ async function main() {
     detailsFor = selected;
     renderDetails($("details"), cases[selected], { rocket, scenario, verdict, describe, windSummary });
   }
-  function setTab(name) {
+  function setTab(name: Tab) {
     tab = name;
-    document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === name));
+    document.querySelectorAll<HTMLButtonElement>("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === name));
     const det = name === "details";
     $("details").hidden = !det;
     $("right").hidden = det;
     $("timeline").hidden = det;
     if (det) { setPlaying(false); showDetails(); }
-    try { localStorage.setItem("bgnc-tab", name); } catch {}
+    try { localStorage.setItem("bgnc-tab", name); } catch { /* storage unavailable */ }
   }
-  document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+  document.querySelectorAll<HTMLButtonElement>("#tabs button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab as Tab)));
   const lastRocketPos = new THREE.Vector3();
 
   // ---------------------------------------------------------------- panel
@@ -205,18 +254,19 @@ async function main() {
   });
 
   // ---------------------------------------------------------------- charts
-  const altChart = new TimeChart($("chart-alt"), { title: "Altitude", unit: "m", yMin: 0 });
-  const thrChart = new TimeChart($("chart-thr"), {
+  const altChart = new TimeChart($<HTMLCanvasElement>("chart-alt"), { title: "Altitude", unit: "m", yMin: 0 });
+  const thrChart = new TimeChart($<HTMLCanvasElement>("chart-thr"), {
     title: "Throttle", unit: "% T_max", yMin: 0, yMax: 105,
     bands: [{ y: rocket.thr_min * 100, label: "min" }, { y: rocket.thr_max * 100, label: "plan max" }],
   });
 
-  const comparing = () => $("opt-compare").checked;
+  const checkbox = (id: string) => $<HTMLInputElement>(id);
+  const comparing = () => checkbox("opt-compare").checked;
 
   function refreshCharts() {
     const shown = cases.map((c, i) => ({ c, i })).filter(({ i }) => comparing() || i === selected);
-    shown.sort((a, b) => (a.i === selected) - (b.i === selected)); // selected drawn last (on top)
-    const mk = (f) => shown.map(({ c, i }) => ({
+    shown.sort((a, b) => Number(a.i === selected) - Number(b.i === selected)); // selected drawn last (on top)
+    const mk = (f: "alt" | "thr"): Series[] => shown.map(({ c, i }) => ({
       t: c.sim.t, y: f === "alt" ? c.sim.r.map((v) => v[0]) : c.sim.throttle.map((v) => v * 100),
       color: c.color, width: i === selected ? 2 : 1, alpha: i === selected ? 1 : 0.35,
     }));
@@ -227,7 +277,7 @@ async function main() {
   }
 
   // ---------------------------------------------------------------- selection / visibility
-  function select(i) {
+  function select(i: number) {
     selected = i;
     cases.forEach((c, j) => (c.el.hidden = j === i));
     const active = $("active-case");
@@ -240,21 +290,21 @@ async function main() {
 
   function refresh() {
     const cmp = comparing();
-    world.cone.visible = $("opt-cone").checked;
+    world.cone.visible = checkbox("opt-cone").checked;
     cases.forEach((c, i) => {
       const sel = i === selected;
       c.flown.visible = sel || cmp;
       c.flown.material.opacity = sel ? 1 : 0.35;
-      c.planGroup.visible = sel && $("opt-plans").checked;
-      c.replanGroup.visible = sel && $("opt-replans").checked;
+      c.planGroup.visible = sel && checkbox("opt-plans").checked;
+      c.replanGroup.visible = sel && checkbox("opt-replans").checked;
       if (c.ignition) c.ignition.visible = sel;
     });
     refreshCharts();
   }
 
   ["opt-plans", "opt-replans", "opt-cone", "opt-compare"].forEach((id) => $(id).addEventListener("change", refresh));
-  $("opt-chase").addEventListener("change", (e) => setChase(e.target.checked));
-  const scaleInput = $("opt-scale");
+  checkbox("opt-chase").addEventListener("change", (e) => setChase((e.target as HTMLInputElement).checked));
+  const scaleInput = $<HTMLInputElement>("opt-scale");
   rocket3d.setScale(+scaleInput.value);
 
   const overview = () => {
@@ -263,9 +313,9 @@ async function main() {
   };
   overview();
 
-  function setChase(on) {
+  function setChase(on: boolean) {
     chase = on;
-    $("opt-chase").checked = on;
+    checkbox("opt-chase").checked = on;
     if (on) {
       const p = rocket3d.group.position;
       const bodyLen = (rocket.geometry?.length ?? 40) * +scaleInput.value;
@@ -276,15 +326,16 @@ async function main() {
   }
 
   // ---------------------------------------------------------------- timeline
-  const scrub = $("scrub");
-  const setPlaying = (p) => { playing = p; $("btn-play").textContent = p ? "❚❚" : "▶"; };
-  $("btn-play").onclick = () => { if (t >= tMax) t = 0; setPlaying(!playing); };
+  const scrub = $<HTMLInputElement>("scrub");
+  const btnPlay = $<HTMLButtonElement>("btn-play");
+  const setPlaying = (p: boolean) => { playing = p; btnPlay.textContent = p ? "❚❚" : "▶"; };
+  btnPlay.onclick = () => { if (t >= tMax) t = 0; setPlaying(!playing); };
   $("btn-restart").onclick = () => { t = 0; setPlaying(true); };
-  $("speed").onchange = (e) => (speed = +e.target.value);
-  scrub.addEventListener("input", () => { t = (scrub.value / 1000) * tMax; setPlaying(false); });
+  $<HTMLSelectElement>("speed").onchange = (e) => (speed = +(e.target as HTMLSelectElement).value);
+  scrub.addEventListener("input", () => { t = (+scrub.value / 1000) * tMax; setPlaying(false); });
   window.addEventListener("keydown", (e) => {
-    if (e.target.tagName === "SELECT") return;
-    if (e.code === "Space") { e.preventDefault(); $("btn-play").click(); }
+    if ((e.target as HTMLElement | null)?.tagName === "SELECT") return;
+    if (e.code === "Space") { e.preventDefault(); btnPlay.click(); }
     else if (e.key === "ArrowRight") { t = Math.min(t + 0.1, tMax); setPlaying(false); }
     else if (e.key === "ArrowLeft") { t = Math.max(t - 0.1, 0); setPlaying(false); }
     else if (e.key.toLowerCase() === "c") setChase(!chase);
@@ -296,9 +347,10 @@ async function main() {
   window.addEventListener("resize", () => lineMats.forEach((m) => m.resolution.set(window.innerWidth, window.innerHeight)));
 
   // ---------------------------------------------------------------- HUD
-  function updateHud(c, st) {
+  function updateHud(c: Case, st: SimSample) {
     const m = c.sim.metrics;
-    const ax = st.att ?? (norm(st.T) > 1 ? st.T.map((c) => c / norm(st.T)) : [1, 0, 0]);
+    const nT = norm(st.T);
+    const ax: Vec3 = st.att ?? (nT > 1 ? [st.T[0] / nT, st.T[1] / nT, st.T[2] / nT] : [1, 0, 0]);
     const [pitch, yaw] = pitchYaw(ax);
     $("hud-t").textContent = Math.min(t, c.tEnd).toFixed(2);
     $("hud-alt").textContent = st.r[0].toFixed(1);
@@ -318,7 +370,7 @@ async function main() {
     $("g-mag").textContent = gmag.toFixed(1);
     $("g-mag").classList.toggle("sat", sat);
     gimbalView.update(gp, gy, flameLevel(st.throttle), st.throttle > 0.01);
-    const trail = [];
+    const trail: [number, number][] = [];
     for (let k = 24; k >= 0; k--) {
       const tt = t - k * 0.06;
       if (tt < 0) continue;
@@ -342,7 +394,8 @@ async function main() {
     } else if (st.throttle > 0) {
       phase.className = "phase burn";
       phase.textContent = "POWERED DESCENT";
-      const active = c.replanLines.filter((r) => r.t0 <= t).at(-1);
+      const started = c.replanLines.filter((r) => r.t0 <= t);
+      const active = started[started.length - 1];
       status.textContent = active ? `following plan made at T+${active.t0.toFixed(1)} s` : "following pre-computed plan";
     } else {
       phase.className = "phase coast";
@@ -354,15 +407,18 @@ async function main() {
   // ---------------------------------------------------------------- loop
   const clock = new THREE.Clock();
   const q = new URLSearchParams(location.search); // deep links: ?case=3&t=10.5&chase=1&paused=1&compare=1
-  if (q.has("case")) selected = Math.min(Math.max(+q.get("case") - 1, 0), cases.length - 1);
-  if (q.has("t")) t = +q.get("t");
-  if (q.get("compare") === "1") $("opt-compare").checked = true;
+  if (q.has("case")) selected = Math.min(Math.max(+(q.get("case") ?? 1) - 1, 0), cases.length - 1);
+  if (q.has("t")) t = +(q.get("t") ?? 0);
+  if (q.get("compare") === "1") checkbox("opt-compare").checked = true;
   select(selected);
   setPlaying(!q.has("paused"));
   let savedTab = q.get("tab");
-  try { savedTab ??= localStorage.getItem("bgnc-tab"); } catch {}
+  try { savedTab ??= localStorage.getItem("bgnc-tab"); } catch { /* storage unavailable */ }
   if (savedTab === "details") setTab("details");
-  initSolver({ runs: cases.map((c) => ({ name: c.sim.name, el: c.el })), selectedName: () => cases[selected].sim.name, selectedIndex: () => selected, time: () => t, tab: () => tab, solvedAt: data.solved_at });
+  void initSolver({
+    runs: cases.map((c) => ({ name: c.sim.name, el: c.el })), selectedName: () => cases[selected].sim.name,
+    selectedIndex: () => selected, time: () => t, tab: () => tab, solvedAt: data.solved_at,
+  });
   if (q.get("chase") !== "0") { // chase camera by default; ?chase=0 or key C for the overview
     const st0 = sampleSim(cases[selected].sim, t);
     rocket3d.update(toThree(st0.r), st0.att ? toThree(st0.att) : new THREE.Vector3(0, 1, 0), 0);
@@ -376,7 +432,7 @@ async function main() {
       t += dt * speed;
       if (t >= tMax) { t = tMax; setPlaying(false); }
     }
-    scrub.value = Math.round((t / tMax) * 1000);
+    scrub.value = String(Math.round((t / tMax) * 1000));
     $("time-label").textContent = `${t.toFixed(2)} s`;
 
     const cmp = comparing();
@@ -417,25 +473,39 @@ async function main() {
 
 // ---------------------------------------------------------------- solver (needs `run.py --serve`)
 const api = {
-  status: () => fetch("/api/status", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-  solve: (cases) => fetch("/api/solve", { method: "POST", body: JSON.stringify({ cases }) }).then((r) => r.json()),
-  cancel: () => fetch("/api/cancel", { method: "POST", body: "{}" }).then((r) => r.json()),
+  status: (): Promise<SolverStatus | null> =>
+    fetch("/api/status", { cache: "no-store" }).then((r) => (r.ok ? (r.json() as Promise<SolverStatus>) : null)).catch(() => null),
+  solve: (cases: string[] | null): Promise<SolverStatus & { error?: string | null }> =>
+    fetch("/api/solve", { method: "POST", body: JSON.stringify({ cases }) }).then((r) => r.json()),
+  cancel: (): Promise<SolverStatus> => fetch("/api/cancel", { method: "POST", body: "{}" }).then((r) => r.json()),
 };
 
-const fmtAgo = (iso) => {
+const fmtAgo = (iso: string | null | undefined): string => {
   if (!iso) return "unknown time";
-  const d = new Date(iso), s = (Date.now() - d) / 1000;
+  const d = new Date(iso), s = (Date.now() - d.getTime()) / 1000;
   if (s < 90) return "just now";
   if (s < 3600) return `${Math.round(s / 60)} min ago`;
   if (s < 86400) return `${Math.round(s / 3600)} h ago`;
   return d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 };
 
+interface SolverContext {
+  runs: { name: string; el: HTMLElement }[];
+  selectedName: () => string;
+  selectedIndex: () => number;
+  time: () => number;
+  tab: () => string;
+  solvedAt: string | undefined;
+}
+
+type RowState = "done" | "active" | "queued";
+
 /** Wires the Run selected / Run all buttons. When a solve finishes the page reloads on the same
  * run, tab and time so the new results show. */
-async function initSolver(ctx) {
+async function initSolver(ctx: SolverContext): Promise<void> {
   const st0 = await api.status();
-  const btnSel = $("btn-solve-sel"), btnAll = $("btn-solve-all"), btnCancel = $("btn-cancel");
+  const btnSel = $<HTMLButtonElement>("btn-solve-sel"), btnAll = $<HTMLButtonElement>("btn-solve-all");
+  const btnCancel = $<HTMLButtonElement>("btn-cancel");
   const status = $("solver-status");
   const idle = () => (status.textContent = `Results from ${fmtAgo(ctx.solvedAt ?? st0?.data_mtime)}`);
   if (!st0) {
@@ -443,16 +513,17 @@ async function initSolver(ctx) {
     status.innerHTML = `Static mode: start with <code>run.py --serve</code> to solve`;
     return;
   }
-  let version = st0.version, timer = null;
+  const version = st0.version;
+  let timer: ReturnType<typeof setTimeout> | null = null;
 
   /** Mark each run row: queued / active (being planned or simulated) / done, or clear it. */
-  function markRows(st) {
+  function markRows(st: SolverStatus) {
     const queue = st.running ? (st.cases ?? ctx.runs.map((r) => r.name)) : [];
     const p = st.progress;
     const cur = p?.stage === "sim" ? queue.indexOf(p.label) : p?.stage === "done" ? queue.length : -1; // -1: still planning
     for (const r of ctx.runs) {
       const k = queue.indexOf(r.name);
-      let state = null, text = "";
+      let state: RowState | null = null, text = "";
       if (k >= 0 && cur >= 0 && k < cur) [state, text] = ["done", "Updated"];
       else if (k >= 0 && k === cur) [state, text] = ["active", "Simulating…"];
       else if (k >= 0 && cur < 0 && p?.stage === "plan") [state, text] = ["active", `${p.label}…`];
@@ -460,12 +531,13 @@ async function initSolver(ctx) {
       for (const el of [r.el, r.name === ctx.selectedName() ? $("active-case") : null]) {
         if (!el) continue; // the selected run is also shown in the "Active simulation" card
         if (state) el.dataset.solve = state; else delete el.dataset.solve;
-        el.querySelector(".run-status").textContent = text;
+        const statusEl = el.querySelector(".run-status");
+        if (statusEl) statusEl.textContent = text;
       }
     }
   }
 
-  function show(st) {
+  function show(st: SolverStatus) {
     const running = st.running;
     btnSel.disabled = btnAll.disabled = running;
     btnSel.hidden = btnAll.hidden = running; // header shows only Cancel while solving
@@ -489,32 +561,32 @@ async function initSolver(ctx) {
     timer = null;
     if (st.version !== version && !st.error) {
       const q = new URLSearchParams(location.search);
-      q.set("case", ctx.selectedIndex() + 1);
+      q.set("case", String(ctx.selectedIndex() + 1));
       q.set("t", ctx.time().toFixed(2));
       q.set("tab", ctx.tab());
       q.set("paused", "1");
       location.search = q.toString();
     }
   }
-  async function start(cases) {
+  async function start(cases: string[] | null) {
     const r = await api.solve(cases);
     if (r.error) { status.textContent = r.error; return; }
     show(r);
-    if (!timer) poll();
+    if (!timer) void poll();
   }
   btnSel.onclick = () => start([ctx.selectedName()]);
   btnAll.onclick = () => start(null);
   btnCancel.onclick = () => api.cancel();
   show(st0);
-  if (st0.running) poll();
+  if (st0.running) void poll();
   setInterval(() => !timer && !btnSel.disabled && idle(), 30000);
 }
 
-main().catch(async (err) => {
+main().catch(async (err: unknown) => {
   console.error(err);
   const el = $("error");
   el.hidden = false;
-  el.textContent = String(err.message || err);
+  el.textContent = err instanceof Error ? err.message : String(err);
   if (await api.status()) { // served by run.py but no results yet: offer to solve
     const b = document.createElement("button");
     b.className = "btn primary";
@@ -522,8 +594,14 @@ main().catch(async (err) => {
     b.onclick = async () => {
       b.disabled = true;
       await api.solve(null);
-      const wait = async () => { const st = await api.status(); st.running ? (b.textContent = st.progress ? `Solving ${st.progress.done + 1}/${st.progress.total}…` : "Starting…", setTimeout(wait, 500)) : location.reload(); };
-      wait();
+      const wait = async () => {
+        const st = await api.status();
+        if (st?.running) {
+          b.textContent = st.progress ? `Solving ${st.progress.done + 1}/${st.progress.total}…` : "Starting…";
+          setTimeout(wait, 500);
+        } else location.reload();
+      };
+      void wait();
     };
     el.append(document.createElement("br"), b);
   }

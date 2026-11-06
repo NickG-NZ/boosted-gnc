@@ -1,12 +1,22 @@
 import * as THREE from "three";
+import { canvas2d } from "./scene.js";
 
 const DEG = Math.PI / 180;
 const DOWN = new THREE.Vector3(0, -1, 0);
 
-function textSprite(text, color = "#a3acb8") {
+type CylMesh = THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial>;
+
+interface Actuator {
+  anchor: THREE.Vector3;
+  local: THREE.Vector3;
+  rod: THREE.Mesh;
+  cyl: THREE.Mesh;
+}
+
+function textSprite(text: string, color = "#a3acb8"): THREE.Sprite {
   const c = document.createElement("canvas");
   c.width = 128; c.height = 64;
-  const g = c.getContext("2d");
+  const g = canvas2d(c);
   g.fillStyle = color;
   g.font = "600 34px JetBrains Mono, monospace";
   g.textAlign = "center"; g.textBaseline = "middle";
@@ -24,15 +34,30 @@ function textSprite(text, color = "#a3acb8") {
  * point; two actuators connect it to the thrust structure; the faint ring shows the ±limit.
  */
 export class GimbalView {
-  constructor(canvas, gimbalMaxDeg = 8) {
+  private readonly canvas: HTMLCanvasElement;
+  private readonly gMax: number;
+  private readonly renderer: THREE.WebGLRenderer;
+  private readonly scene = new THREE.Scene();
+  private readonly camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+  private readonly engine = new THREE.Group();
+  private readonly plume = new THREE.Group();
+  private readonly plumeOuter: CylMesh;
+  private readonly plumeCore: CylMesh;
+  private readonly exitDot: THREE.Mesh;
+  private readonly acts: Actuator[];
+  private readonly exitY = -3.0;
+  private readonly mountL = 1.6; // actuator attach point below the pivot on the bell
+  private readonly _dir = new THREE.Vector3();
+  private readonly _q = new THREE.Quaternion();
+
+  constructor(canvas: HTMLCanvasElement, gimbalMaxDeg = 8) {
     this.canvas = canvas;
     this.gMax = gimbalMaxDeg;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    const scene = (this.scene = new THREE.Scene());
-    this.camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+    const scene = this.scene;
     this.camera.position.set(6.4, 1.5, 8.0);
     this.camera.lookAt(0, -2.0, 0);
 
@@ -51,7 +76,6 @@ export class GimbalView {
     scene.add(plate);
 
     // engine: pivot at the origin, everything hangs below it
-    this.engine = new THREE.Group();
     scene.add(this.engine);
     const pivot = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), dark);
     this.engine.add(pivot);
@@ -59,7 +83,7 @@ export class GimbalView {
     chamber.position.y = -0.45;
     this.engine.add(chamber);
     // bell: throat at y = -0.85, exit (radius 0.95) at y = -3.0
-    const prof = [];
+    const prof: THREE.Vector2[] = [];
     for (let i = 0; i <= 16; i++) {
       const s = i / 16;
       prof.push(new THREE.Vector2(0.2 + 0.75 * Math.pow(s, 0.7), -0.85 - 2.15 * s));
@@ -67,13 +91,10 @@ export class GimbalView {
     prof.unshift(new THREE.Vector2(0.34, -0.8));
     const bell = new THREE.Mesh(new THREE.LatheGeometry(prof, 40), metal);
     this.engine.add(bell);
-    this.exitY = -3.0;
-    this.mountL = 1.6; // actuator attach point below the pivot on the bell
 
     // plume (additive cones), hangs from the exit plane
-    const pm = (c, o) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false });
+    const pm = (c: string, o: number) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false });
     const plumeGeo = new THREE.CylinderGeometry(0.9, 0.35, 1, 28, 1, true).translate(0, -0.5, 0);
-    this.plume = new THREE.Group();
     this.plumeOuter = new THREE.Mesh(plumeGeo, pm("#ff8a3d", 0.5));
     this.plumeCore = new THREE.Mesh(plumeGeo, pm("#fff1c4", 0.8));
     this.plume.add(this.plumeOuter, this.plumeCore);
@@ -82,7 +103,7 @@ export class GimbalView {
 
     // gimbal-limit ring around the neutral exit centre, and neutral axis
     const rLim = Math.abs(this.exitY) * Math.tan(this.gMax * DEG);
-    const ringPts = [];
+    const ringPts: THREE.Vector3[] = [];
     for (let i = 0; i <= 64; i++) {
       const a = (i / 64) * Math.PI * 2;
       ringPts.push(new THREE.Vector3(Math.cos(a) * rLim, this.exitY, Math.sin(a) * rLim));
@@ -115,13 +136,11 @@ export class GimbalView {
       return { anchor, local, rod, cyl };
     });
 
-    this._dir = new THREE.Vector3();
-    this._q = new THREE.Quaternion();
     this.resize();
     new ResizeObserver(() => this.resize()).observe(canvas);
   }
 
-  resize() {
+  resize(): void {
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     if (!w || !h) return;
     this.renderer.setSize(w, h, false);
@@ -130,7 +149,7 @@ export class GimbalView {
   }
 
   /** gp, gy: gimbal deflection in pitch / yaw (deg); x: exaggerated throttle level 0..1, on: engine lit */
-  update(gp, gy, x, on) {
+  update(gp: number, gy: number, x: number, on: boolean): void {
     // nozzle exit points opposite the thrust: thrust tilts toward +g, the bell exit toward -g
     const sp = Math.sin(gp * DEG), sy = Math.sin(gy * DEG);
     this._dir.set(-sp, -Math.sqrt(Math.max(0, 1 - sp * sp - sy * sy)), -sy).normalize();
@@ -167,13 +186,18 @@ export class GimbalView {
 
 /** Top-down gimbal plot: limit circle, current (pitch, yaw) deflection and a short trail. */
 export class GimbalTarget {
-  constructor(canvas, gimbalMaxDeg = 8) {
+  private readonly canvas: HTMLCanvasElement;
+  private readonly g: CanvasRenderingContext2D;
+  private readonly gMax: number;
+
+  constructor(canvas: HTMLCanvasElement, gimbalMaxDeg = 8) {
     this.canvas = canvas;
-    this.g = canvas.getContext("2d");
+    this.g = canvas2d(canvas);
     this.gMax = gimbalMaxDeg;
   }
 
-  draw(gp, gy, trail, color, sat) {
+  /** trail: recent [pitch, yaw] deflections (deg), oldest first; sat: deflection at the limit. */
+  draw(gp: number, gy: number, trail: [number, number][], color: string, sat: boolean): void {
     const c = this.canvas, g = this.g;
     const dpr = window.devicePixelRatio || 1;
     const W = c.clientWidth, H = c.clientHeight;
@@ -182,7 +206,7 @@ export class GimbalTarget {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, W, H);
     const cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - 12;
-    const X = (p) => cx + (p / this.gMax) * R, Y = (y) => cy - (y / this.gMax) * R;
+    const X = (p: number) => cx + (p / this.gMax) * R, Y = (y: number) => cy - (y / this.gMax) * R;
 
     g.strokeStyle = "rgba(255,255,255,0.08)";
     g.lineWidth = 1;

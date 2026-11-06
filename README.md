@@ -49,9 +49,11 @@ https://github.com/user-attachments/assets/c1ecb7df-4ab0-4165-9dc0-3fc33abc0117
 
 ## Quick start
 
-Requires Python 3.13+, [uv](https://docs.astral.sh/uv/) and a Rust toolchain with `cargo` on `PATH`. `uv sync`
-builds the Rust guidance, control and sim in `sim/` (see [sim/README.md](sim/README.md)) and rebuilds it when its
-sources change.
+Requires Python 3.13+, [uv](https://docs.astral.sh/uv/), a Rust toolchain with `cargo` on `PATH`, and Node.js (`npm`)
+for the viewer. `uv sync` builds the Rust guidance, control and sim in `sim/` (see [sim/README.md](sim/README.md)) and
+rebuilds it when its sources change. The three.js viewer is TypeScript in `web/src/`; `run.py --serve` compiles it to
+`web/js/` when the build is missing or stale (or run `cd web && npm install && npm run build`, `npm run watch` while
+editing).
 
 ```bash
 uv sync

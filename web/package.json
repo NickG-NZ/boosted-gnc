@@ -1,0 +1,14 @@
+{
+  "name": "boosted-gnc-viewer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/three": "0.160.0",
+    "typescript": "~5.6.3"
+  }
+}

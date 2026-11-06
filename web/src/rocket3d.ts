@@ -1,14 +1,18 @@
 import * as THREE from "three";
+import { canvas2d } from "./scene.js";
+import type { Geometry } from "./types.js";
 
 const UP = new THREE.Vector3(0, 1, 0);
 const DOWN = new THREE.Vector3(0, -1, 0);
 
-let _glow = null;
-function glowTexture() {
+type PlumeMesh = THREE.Mesh<THREE.ConeGeometry, THREE.MeshBasicMaterial>;
+
+let _glow: THREE.CanvasTexture | null = null;
+function glowTexture(): THREE.CanvasTexture {
   if (_glow) return _glow;
   const c = document.createElement("canvas");
   c.width = c.height = 128;
-  const g = c.getContext("2d");
+  const g = canvas2d(c);
   const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
   grd.addColorStop(0, "rgba(255,255,255,1)");
   grd.addColorStop(0.25, "rgba(255,200,140,0.6)");
@@ -25,9 +29,21 @@ function glowTexture() {
  * The body axis is aligned with the thrust vector (thrust acts along the body).
  */
 export class Rocket3D {
-  constructor({ length = 42, diameter = 3.7, n_legs = 4, n_grid_fins = 4 } = {}, color = "#4cc9f0") {
-    this.group = new THREE.Group();
-    this.body = new THREE.Group();
+  readonly group = new THREE.Group();
+  readonly body = new THREE.Group();
+  private readonly nozzle = new THREE.Group();
+  private readonly plume = new THREE.Group();
+  private readonly plumeOuter: PlumeMesh;
+  private readonly plumeCore: PlumeMesh;
+  private readonly glow: THREE.Sprite;
+  private readonly engineLight: THREE.PointLight;
+  private readonly _cOuterLo = new THREE.Color("#b8330f");
+  private readonly _cOuterHi = new THREE.Color("#ffb347");
+  private readonly _cCoreLo = new THREE.Color("#ff9a4d");
+  private readonly _cCoreHi = new THREE.Color("#ffffff");
+  private readonly _dir = UP.clone();
+
+  constructor({ length = 42, diameter = 3.7, n_legs = 4, n_grid_fins = 4 }: Geometry = {}, color = "#4cc9f0") {
     this.group.add(this.body);
     const R = diameter / 2;
     const base = 2.0; // height of nozzle exit above leg feet plane
@@ -37,7 +53,7 @@ export class Rocket3D {
     const accent = new THREE.MeshStandardMaterial({ color, roughness: 0.5, emissive: color, emissiveIntensity: 0.25 });
     const soot = new THREE.MeshStandardMaterial({ color: "#3a332d", roughness: 0.9 });
 
-    const add = (geo, mat, y = 0) => {
+    const add = (geo: THREE.BufferGeometry, mat: THREE.Material, y = 0) => {
       const m = new THREE.Mesh(geo, mat);
       m.position.y = y;
       this.body.add(m);
@@ -45,7 +61,6 @@ export class Rocket3D {
     };
 
     // engine section + nozzle (the nozzle pivots about its top so it can show the gimbal)
-    this.nozzle = new THREE.Group();
     this.nozzle.position.y = base + 1.6;
     const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 1.0, 1.6, 24, 1, true), dark);
     bell.position.y = -0.8;
@@ -88,11 +103,10 @@ export class Rocket3D {
     }
 
     // exhaust plume: two additive cones (outer glow + hot core), pointing down from the nozzle
-    const plumeMat = (c, o) => new THREE.MeshBasicMaterial({
+    const plumeMat = (c: string, o: number) => new THREE.MeshBasicMaterial({
       color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false,
     });
     const coneGeo = new THREE.ConeGeometry(1, 1, 24, 1, true).rotateX(Math.PI).translate(0, -0.5, 0);
-    this.plume = new THREE.Group();
     this.plumeOuter = new THREE.Mesh(coneGeo, plumeMat("#ff8a3d", 0.55));
     this.plumeCore = new THREE.Mesh(coneGeo, plumeMat("#fff1c4", 0.85));
     this.glow = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -101,13 +115,9 @@ export class Rocket3D {
     this.plume.add(this.plumeOuter, this.plumeCore, this.glow);
     this.plume.position.y = -1.65; // nozzle exit, in the nozzle's pivot frame
     this.nozzle.add(this.plume);
-    this._cOuterLo = new THREE.Color("#b8330f"); this._cOuterHi = new THREE.Color("#ffb347");
-    this._cCoreLo = new THREE.Color("#ff9a4d"); this._cCoreHi = new THREE.Color("#ffffff");
     this.engineLight = new THREE.PointLight("#ff9a4d", 0, 120, 1.5);
     this.engineLight.position.y = base - 4;
     this.body.add(this.engineLight);
-
-    this._dir = UP.clone();
   }
 
   /**
@@ -115,7 +125,7 @@ export class Rocket3D {
    * @param level exaggerated throttle level 0..1 (0 = engine floor, 1 = full) driving flame size,
    *        colour and brightness, @param gimbal three.js gimbal vector (perp. to axis, |g| = sin δ)
    */
-  update(r, axis, throttle, level = throttle, gimbal = null) {
+  update(r: THREE.Vector3, axis: THREE.Vector3 | null, throttle: number, level = throttle, gimbal: THREE.Vector3 | null = null): void {
     this.group.position.copy(r);
     if (axis && axis.lengthSq() > 1e-12) this._dir.copy(axis).normalize();
     this.body.quaternion.setFromUnitVectors(UP, this._dir);
@@ -146,7 +156,7 @@ export class Rocket3D {
     }
   }
 
-  setScale(s) {
+  setScale(s: number): void {
     this.group.scale.setScalar(s);
   }
 }

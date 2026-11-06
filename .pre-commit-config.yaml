@@ -11,3 +11,9 @@ repos:
         entry: uv run ruff check
         language: system
         types: [python]
+      - id: tsc
+        name: typecheck viewer (tsc)
+        entry: bash -c 'cd web && npx --no-install tsc --noEmit'
+        language: system
+        files: ^web/(src/.*\.ts|tsconfig\.json|package\.json)$
+        pass_filenames: false

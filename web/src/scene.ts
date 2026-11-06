@@ -1,8 +1,20 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
+export interface World {
+  renderer: THREE.WebGLRenderer;
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  controls: OrbitControls;
+  cone: THREE.Group;
+  shadow: THREE.Mesh<THREE.CircleGeometry, THREE.MeshBasicMaterial>;
+}
+
 /** Renderer, camera, lights, ground, landing pad and glide-slope cone. */
-export function createWorld(container, { glideSlopeDeg, coneHeight = 1800 }) {
+export function createWorld(
+  container: HTMLElement,
+  { glideSlopeDeg, coneHeight = 1800 }: { glideSlopeDeg: number; coneHeight?: number },
+): World {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(container.clientWidth, container.clientHeight);
@@ -29,7 +41,7 @@ export function createWorld(container, { glideSlopeDeg, coneHeight = 1800 }) {
   // ground
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(16000, 16000),
-    new THREE.MeshStandardMaterial({ color: "#3a3f47", roughness: 1 })
+    new THREE.MeshStandardMaterial({ color: "#3a3f47", roughness: 1 }),
   );
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
@@ -44,7 +56,7 @@ export function createWorld(container, { glideSlopeDeg, coneHeight = 1800 }) {
   // soft blob shadow under the selected rocket
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(1, 32),
-    new THREE.MeshBasicMaterial({ color: "#000", transparent: true, opacity: 0.5, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: "#000", transparent: true, opacity: 0.5, depthWrite: false }),
   );
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.2;
@@ -59,11 +71,18 @@ export function createWorld(container, { glideSlopeDeg, coneHeight = 1800 }) {
   return { renderer, scene, camera, controls, cone, shadow };
 }
 
-function makePad() {
+/** 2D context of a fresh canvas (throws if the browser cannot provide one). */
+export function canvas2d(c: HTMLCanvasElement): CanvasRenderingContext2D {
+  const g = c.getContext("2d");
+  if (!g) throw new Error("2D canvas not supported");
+  return g;
+}
+
+function makePad(): THREE.Mesh {
   const size = 512;
   const c = document.createElement("canvas");
   c.width = c.height = size;
-  const g = c.getContext("2d");
+  const g = canvas2d(c);
   g.fillStyle = "#2b323c";
   g.beginPath(); g.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2); g.fill();
   g.strokeStyle = "#e9edf2"; g.lineWidth = 14;
@@ -77,7 +96,7 @@ function makePad() {
   tex.anisotropy = 8;
   const pad = new THREE.Mesh(
     new THREE.CircleGeometry(30, 64),
-    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 })
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 }),
   );
   pad.rotation.x = -Math.PI / 2;
   pad.position.y = 0.1;
@@ -85,7 +104,7 @@ function makePad() {
 }
 
 /** Glide-slope constraint ||E r|| tan(γ) <= r_up: an upward cone with apex at the pad. */
-function makeGlideSlopeCone(gsDeg, height) {
+function makeGlideSlopeCone(gsDeg: number, height: number): THREE.Group {
   const radius = height / Math.tan((gsDeg * Math.PI) / 180);
   const geo = new THREE.ConeGeometry(radius, height, 72, 1, true);
   geo.rotateX(Math.PI); // apex down
@@ -96,7 +115,7 @@ function makeGlideSlopeCone(gsDeg, height) {
   })));
   const edges = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.ConeGeometry(radius, height, 24, 4, true).rotateX(Math.PI).translate(0, height / 2, 0), 1),
-    new THREE.LineBasicMaterial({ color: "#4cc9f0", transparent: true, opacity: 0.07 })
+    new THREE.LineBasicMaterial({ color: "#4cc9f0", transparent: true, opacity: 0.07 }),
   );
   group.add(edges);
   return group;
