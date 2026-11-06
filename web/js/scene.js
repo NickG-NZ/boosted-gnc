@@ -11,8 +11,8 @@ export function createWorld(container, { glideSlopeDeg, coneHeight = 1800 }) {
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color("#06080c");
-  scene.fog = new THREE.Fog("#06080c", 3500, 9000);
+  scene.background = new THREE.Color("#2b2f36");
+  scene.fog = new THREE.Fog("#2b2f36", 3500, 9000);
 
   const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.5, 20000);
   camera.position.set(2300, 650, 2500);
@@ -29,11 +29,11 @@ export function createWorld(container, { glideSlopeDeg, coneHeight = 1800 }) {
   // ground
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(16000, 16000),
-    new THREE.MeshStandardMaterial({ color: "#0d1117", roughness: 1 })
+    new THREE.MeshStandardMaterial({ color: "#3a3f47", roughness: 1 })
   );
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
-  const grid = new THREE.GridHelper(4000, 80, "#1f2a36", "#141b24");
+  const grid = new THREE.GridHelper(4000, 80, "#555c66", "#474d56");
   grid.position.y = 0.05;
   scene.add(grid);
 

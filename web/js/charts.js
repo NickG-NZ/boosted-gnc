@@ -1,6 +1,6 @@
 /** Tiny dependency-free time-series chart on a 2D canvas. */
 export class TimeChart {
-  constructor(canvas, { title, unit, yMin = null, yMax = null, bands = [] }) {
+  constructor(canvas, { title, unit, yMin = null, yMax = null, bands = [], cursor = 0 }) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.title = title;
@@ -9,7 +9,7 @@ export class TimeChart {
     this.yMaxFixed = yMax;
     this.bands = bands; // [{y, label}] horizontal reference lines
     this.series = [];
-    this.cursor = 0;
+    this.cursor = cursor;
     new ResizeObserver(() => this.draw()).observe(canvas);
   }
 
@@ -43,7 +43,7 @@ export class TimeChart {
     const Y = (y) => pad.t + (1 - (y - this.yMin) / (this.yMax - this.yMin || 1)) * ph;
 
     g.font = "600 10px JetBrains Mono, monospace";
-    g.fillStyle = "#7d8a99";
+    g.fillStyle = "#a3acb8";
     g.fillText(`${this.title.toUpperCase()} [${this.unit}]`, pad.l, 13);
 
     // axes ticks
@@ -87,6 +87,7 @@ export class TimeChart {
     g.globalAlpha = 1;
     g.setLineDash([]);
 
+    if (this.cursor == null) return;
     g.strokeStyle = "rgba(255,255,255,0.6)";
     g.beginPath(); g.moveTo(X(this.cursor), pad.t); g.lineTo(X(this.cursor), pad.t + ph); g.stroke();
   }

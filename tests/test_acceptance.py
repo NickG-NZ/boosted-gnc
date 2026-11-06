@@ -6,10 +6,13 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from scipy.linalg import expm
 
 from landing import gfold, scvx
 from landing.dynamics import TruthModel, open_loop_resim
-from landing.guidance import SCvxGuidance
+from landing.guidance import GUIDANCE, SCvxGuidance
+from landing.ignition import plan_with_ignition
+from landing.mpc import NU, NX, continuous_model, discretize
 from landing.sim import project_thrust, simulate, truth_from_case
 from landing.vehicle import Scenario
 
@@ -123,8 +126,6 @@ def test_closed_loop_replan_handles_perturbation(sc, plan_s):
 
 
 def test_coast_ignition_scvx_lands():
-    from landing.ignition import plan_with_ignition
-
     sc2 = Scenario.from_json(CFG.parent / "coast_landing.json")
     g = SCvxGuidance(sc2)
     plan = plan_with_ignition(sc2, g)
@@ -147,9 +148,6 @@ def coast_sc():
 
 @pytest.fixture(scope="module")
 def coast_plans(coast_sc):
-    from landing.guidance import GUIDANCE
-    from landing.ignition import plan_with_ignition
-
     return {k: plan_with_ignition(coast_sc, GUIDANCE[k](coast_sc)) for k in ("gfold", "scvx")}
 
 
@@ -166,10 +164,6 @@ def test_plan_starts_on_attitude_and_ends_upright(coast_sc, coast_plans, guidanc
 
 
 def test_mpc_discretization_is_exact():
-    from scipy.linalg import expm
-
-    from landing.mpc import NU, NX, continuous_model, discretize
-
     A, B = continuous_model(4.0e5, 2.4e4, 8.45e5, np.array([0.1, -0.05]), 1.5)
     c = np.linspace(-1, 1, NX)
     dt = 0.7
@@ -187,8 +181,6 @@ def test_mpc_discretization_is_exact():
     ("gfold", {"drag": True}, 2.0),
 ])
 def test_mpc_lands_precisely(coast_sc, coast_plans, case):
-    from landing.guidance import GUIDANCE
-
     key, truth, hz = case
     res = simulate(coast_sc, coast_plans[key], truth_from_case(coast_sc, truth),
                    guidance=GUIDANCE[key](coast_sc), replan_hz=hz, controller="mpc")

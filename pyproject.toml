@@ -11,10 +11,24 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "isort>=9.0.2",
+    "pre-commit>=4.7.0",
     "pytest>=9.2.0",
+    "ruff>=0.17.4",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
 filterwarnings = ["ignore::UserWarning"]
+
+[tool.isort]
+profile = "black"
+line_length = 120
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# imports only at the top of the file: E402 = module import not at top, PLC0415 = import inside a function
+select = ["E402", "PLC0415"]

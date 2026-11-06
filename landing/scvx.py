@@ -11,6 +11,7 @@ from dataclasses import dataclass, replace
 import cvxpy as cp
 import numpy as np
 
+from .gfold import attitude_penalties, check_solution
 from .trajectory import Trajectory
 from .vehicle import Scenario
 
@@ -202,8 +203,6 @@ class Subproblem:
                 + self.ck[:, k]
                 + nu[:, k]
             )
-        from .gfold import attitude_penalties
-
         if self.use_d0:  # first thrust within a small cone of the current body axis
             tol = sc.initial_attitude_tol
             if tol > 0:
@@ -372,8 +371,6 @@ class SCvxSolver:
                 "defect_l1": float(np.abs(X[1:] - lin[5]).sum()),
             },
         )
-        from .gfold import check_solution
-
         traj.info.update(check_solution(sc, traj, skip_last=False))
         return traj
 

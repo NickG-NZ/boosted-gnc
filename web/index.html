@@ -21,35 +21,45 @@
 
   <aside id="panel">
     <header class="brand">
-      <span class="logo-mark"></span>
       <span class="logo">Boosted<span>-GNC</span></span>
+      <div class="solver-btns">
+        <button id="btn-solve-sel" class="btn primary" title="Re-plan and re-simulate the selected run">▶ Run</button>
+        <button id="btn-solve-all" class="btn" title="Re-plan and re-simulate every run">Run all</button>
+        <button id="btn-cancel" class="btn danger" hidden>Cancel</button>
+      </div>
     </header>
+    <div id="solver-status" class="solver-status muted"></div>
 
-    <section id="current" class="current"></section>
+    <section class="active-sec">
+      <div class="sec-head"><h2>Active simulation</h2></div>
+      <div id="active-case" class="run active"></div>
+    </section>
 
     <section class="cases-sec">
       <div class="sec-head">
         <h2>Simulations</h2>
-        <label class="toggle" title="Overlay every other run"><input type="checkbox" id="opt-compare" /><span>Compare all</span></label>
+        <label class="toggle" title="Overlay every other run"><input type="checkbox" id="opt-compare" /><span>Compare</span></label>
       </div>
       <div id="cases"></div>
     </section>
 
     <section class="display">
-      <h2>Display</h2>
       <div class="chips">
         <label class="chip"><input type="checkbox" id="opt-plans" checked /><span>Plan</span></label>
         <label class="chip"><input type="checkbox" id="opt-replans" checked /><span>Re-plans</span></label>
-        <label class="chip"><input type="checkbox" id="opt-cone" checked /><span>Glide cone</span></label>
-        <label class="chip"><input type="checkbox" id="opt-chase" checked /><span>Chase cam <kbd>C</kbd></span></label>
+        <label class="chip"><input type="checkbox" id="opt-cone" checked /><span>Cone</span></label>
+        <label class="chip"><input type="checkbox" id="opt-chase" checked /><span>Chase</span></label>
       </div>
-      <label class="slider">Rocket scale <input type="range" id="opt-scale" min="1" max="8" step="0.5" value="3" /><span id="opt-scale-val">3×</span></label>
+      <input type="range" id="opt-scale" min="1" max="8" step="0.5" value="3" hidden />
     </section>
-
-    <footer class="keys muted">
-      <kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> step · <kbd>↑</kbd><kbd>↓</kbd> run · drag orbit · scroll zoom
-    </footer>
   </aside>
+
+  <nav id="tabs">
+    <button data-tab="view" class="on">3D view</button>
+    <button data-tab="details">Details</button>
+  </nav>
+
+  <main id="details" hidden></main>
 
   <div id="right">
     <div id="hud">

@@ -14,10 +14,10 @@ from typing import Any
 
 import numpy as np
 
-from .dynamics import TruthModel
-from .trajectory import Trajectory
 from .attitude import AttitudeModel, AttitudeParams, AttitudeState, ReferenceModel
+from .dynamics import TruthModel
 from .mpc import TrackingMPC, embed_gimbal
+from .trajectory import Trajectory
 from .vehicle import E1, Scenario, rotate_toward
 
 

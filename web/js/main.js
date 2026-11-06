@@ -6,13 +6,14 @@ import { createWorld } from "./scene.js";
 import { Rocket3D } from "./rocket3d.js";
 import { TimeChart } from "./charts.js";
 import { GimbalView, GimbalTarget } from "./gimbal.js";
+import { renderDetails } from "./details.js";
 import { CASE_COLORS, toThree, sampleSim, norm, gimbalPY, pitchYaw } from "./util.js";
 
 const $ = (id) => document.getElementById(id);
 
 async function loadData() {
   const url = new URLSearchParams(location.search).get("data") || "data/results.json";
-  const res = await fetch(url);
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`Could not load ${url} (${res.status}). Run: uv run python run.py`);
   return res.json();
 }
@@ -71,6 +72,14 @@ function splitName(sim) {
   return { base, ctrl: CTRL_NAMES[ctrl] ?? ctrl ?? "run" };
 }
 
+/** Tags for a run: controller, plus re-planning when on. Guidance/environment are in the title. */
+function runTags(m, ctrl) {
+  const tags = [{ t: ctrl, k: "ctrl" }];
+  if (m.replan_hz) tags.push({ t: `Re-plan ${m.replan_hz} Hz` });
+  return tags;
+}
+const tagHtml = (tags) => tags.map((g) => `<span class="tag${g.k ? ` ${g.k}` : ""}">${g.t}</span>`).join("");
+
 function describe(m) {
   const tr = m.truth || {};
   let truth = tr.drag === false ? "vacuum" : "atmosphere";
@@ -96,7 +105,7 @@ async function main() {
   const cases = sims.map((sim, i) => {
     const color = CASE_COLORS[i % CASE_COLORS.length];
     const m = sim.metrics;
-    const planData = plans[m.plan];
+    const planData = sim.plan ?? plans[m.plan]; // each run carries the plan it flew
     const flown = fatLine(sim.r.map(toThree), color, { width: 2.5 });
     const planGroup = new THREE.Group();
     // predicted coast (guidance's own model) dotted, then the burn plan dashed
@@ -128,7 +137,7 @@ async function main() {
     marker.scale.setScalar(0.035);
     track(flown);
     scene.add(flown, planGroup, replanGroup, marker);
-    return { sim, color, flown, planGroup, replanGroup, replanLines, ignition, marker, tEnd: sim.t.at(-1) };
+    return { sim, color, planData, flown, planGroup, replanGroup, replanLines, ignition, marker, tEnd: sim.t.at(-1) };
   });
 
   const rocket3d = new Rocket3D(rocket.geometry);
@@ -144,59 +153,43 @@ async function main() {
   const tMax = Math.max(...cases.map((c) => c.tEnd)) + 0.5;
   let selected = Math.max(0, cases.findIndex((c) => c.sim.metrics.plan === "scvx"));
   let t = 0, playing = true, speed = 1, chase = false;
+  let tab = "view", detailsFor = -1;
+
+  // ---------------------------------------------------------------- tabs: 3D view | details
+  function showDetails() {
+    if (detailsFor === selected) return;
+    detailsFor = selected;
+    renderDetails($("details"), cases[selected], { rocket, scenario, verdict, describe });
+  }
+  function setTab(name) {
+    tab = name;
+    document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === name));
+    const det = name === "details";
+    $("details").hidden = !det;
+    $("right").hidden = det;
+    $("timeline").hidden = det;
+    if (det) { setPlaying(false); showDetails(); }
+    try { localStorage.setItem("bgnc-tab", name); } catch {}
+  }
+  document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
   const lastRocketPos = new THREE.Vector3();
 
   // ---------------------------------------------------------------- panel
-  // runs grouped by scenario (name without the controller suffix); one segment per controller
-  const groups = [];
+  // one row per run: title + descriptive tags (results live in the Details tab)
   cases.forEach((c, i) => {
-    const { base, ctrl } = splitName(c.sim);
-    Object.assign(c, { base, ctrl, index: i });
-    let g = groups.find((g) => g.base === base);
-    if (!g) groups.push((g = { base, cases: [] }));
-    g.cases.push(c);
-  });
-  groups.forEach((g) => {
-    const el = document.createElement("div");
-    el.className = "grp";
-    const [head, ...rest] = g.base.split(" · ");
-    el.innerHTML = `<div class="grp-name" title="${g.base}">${head}${rest.length ? ` <em>· ${rest.join(" · ")}</em>` : ""}</div><div class="seg"></div>`;
-    g.cases.forEach((c) => {
-      const m = c.sim.metrics;
-      const [cls, label] = verdict(m);
-      const b = document.createElement("button");
-      b.style.setProperty("--c", c.color);
-      b.title = `${c.index + 1}. ${c.sim.name} — ${label}, miss ${m.touchdown_pos_err_m.toFixed(2)} m`;
-      b.innerHTML = `<span class="dot ${cls}"></span><span class="lbl">${c.ctrl}</span>
-        <span class="val">${m.landed ? `${m.touchdown_pos_err_m.toFixed(m.touchdown_pos_err_m < 10 ? 2 : 0)} m` : "—"}</span>
-        <span class="num">${c.index + 1}</span>`;
-      b.addEventListener("click", () => select(c.index));
-      el.querySelector(".seg").appendChild(b);
-      c.btn = b;
-      c.grpEl = el;
-    });
+    let { base, ctrl } = splitName(c.sim);
+    base = base.replace(/ · re-plan [\d.]+ Hz$/i, "");
+    Object.assign(c, { base, ctrl, index: i, tags: runTags(c.sim.metrics, ctrl) });
+    const el = document.createElement("button");
+    el.className = "run";
+    el.title = c.sim.name;
+    c.rowHtml = `<span class="run-body"><span class="run-title">${base}</span><span class="tags">${tagHtml(c.tags)}<span class="run-status"></span></span></span>
+      <span class="run-num">${i + 1}</span>`;
+    el.innerHTML = c.rowHtml;
+    el.addEventListener("click", () => select(i));
     $("cases").appendChild(el);
+    c.el = el;
   });
-
-  function renderCurrent(c) {
-    const m = c.sim.metrics;
-    const [cls, label] = verdict(m);
-    const [head, ...rest] = c.base.split(" · ");
-    const vtd = Math.hypot(m.touchdown_vert_speed, m.touchdown_horiz_speed);
-    $("current").innerHTML = `
-      <div class="cur-eyebrow"><h2>Selected run · ${c.index + 1}/${cases.length}</h2><span class="badge ${cls}">${label}</span></div>
-      <div class="cur-title">
-        <span class="swatch" style="background:${c.color}"></span>
-        <div class="cur-name">${head}${rest.length ? ` · ${rest.join(" · ")}` : ""}<small>${describe(m)}</small></div>
-        <span class="ctrl-tag">${c.ctrl}</span>
-      </div>
-      <div class="cur-metrics">
-        <div><span>Miss</span><b>${m.touchdown_pos_err_m.toFixed(2)}</b><i>m</i></div>
-        <div><span>Touchdown</span><b>${vtd.toFixed(2)}</b><i>m/s</i></div>
-        <div><span>Fuel</span><b>${m.fuel_used_kg.toFixed(0)}</b><i>kg</i></div>
-        <div><span>Ignite</span><b>${m.t_ignition > 0 ? m.t_ignition.toFixed(1) : "—"}</b><i>T+ s</i></div>
-      </div>`;
-  }
 
   // ---------------------------------------------------------------- charts
   const altChart = new TimeChart($("chart-alt"), { title: "Altitude", unit: "m", yMin: 0 });
@@ -223,10 +216,12 @@ async function main() {
   // ---------------------------------------------------------------- selection / visibility
   function select(i) {
     selected = i;
-    cases.forEach((c, j) => c.btn.classList.toggle("on", j === i));
-    cases.forEach((c) => c.grpEl.classList.toggle("active", c.grpEl === cases[i].grpEl));
-    renderCurrent(cases[i]);
-    cases[i].grpEl.scrollIntoView({ block: "nearest" });
+    cases.forEach((c, j) => (c.el.hidden = j === i));
+    const active = $("active-case");
+    active.innerHTML = cases[i].rowHtml;
+    active.title = cases[i].sim.name;
+    delete active.dataset.solve; // solve status is re-applied on the next solver poll
+    if (tab === "details") showDetails();
     refresh();
   }
 
@@ -247,9 +242,7 @@ async function main() {
   ["opt-plans", "opt-replans", "opt-cone", "opt-compare"].forEach((id) => $(id).addEventListener("change", refresh));
   $("opt-chase").addEventListener("change", (e) => setChase(e.target.checked));
   const scaleInput = $("opt-scale");
-  const applyScale = () => { rocket3d.setScale(+scaleInput.value); $("opt-scale-val").textContent = `${scaleInput.value}×`; };
-  scaleInput.addEventListener("input", applyScale);
-  applyScale();
+  rocket3d.setScale(+scaleInput.value);
 
   const overview = () => {
     controls.target.set(60, h0 * 0.45, -30);
@@ -284,6 +277,7 @@ async function main() {
     else if (e.key.toLowerCase() === "c") setChase(!chase);
     else if (e.key === "ArrowDown") { e.preventDefault(); select((selected + 1) % cases.length); }
     else if (e.key === "ArrowUp") { e.preventDefault(); select((selected + cases.length - 1) % cases.length); }
+    else if (e.key.toLowerCase() === "d") setTab(tab === "details" ? "view" : "details");
     else if (/^[1-9]$/.test(e.key) && +e.key <= cases.length) select(+e.key - 1);
   });
   window.addEventListener("resize", () => lineMats.forEach((m) => m.resolution.set(window.innerWidth, window.innerHeight)));
@@ -352,6 +346,10 @@ async function main() {
   if (q.get("compare") === "1") $("opt-compare").checked = true;
   select(selected);
   setPlaying(!q.has("paused"));
+  let savedTab = q.get("tab");
+  try { savedTab ??= localStorage.getItem("bgnc-tab"); } catch {}
+  if (savedTab === "details") setTab("details");
+  initSolver({ runs: cases.map((c) => ({ name: c.sim.name, el: c.el })), selectedName: () => cases[selected].sim.name, selectedIndex: () => selected, time: () => t, tab: () => tab, solvedAt: data.solved_at });
   if (q.get("chase") !== "0") { // chase camera by default; ?chase=0 or key C for the overview
     const st0 = sampleSim(cases[selected].sim, t);
     rocket3d.update(toThree(st0.r), st0.att ? toThree(st0.att) : new THREE.Vector3(0, 1, 0), 0);
@@ -360,6 +358,7 @@ async function main() {
 
   renderer.setAnimationLoop(() => {
     const dt = clock.getDelta();
+    if (tab === "details") return; // 3D view hidden: skip rendering
     if (playing) {
       t += dt * speed;
       if (t >= tMax) { t = tMax; setPlaying(false); }
@@ -403,9 +402,116 @@ async function main() {
   });
 }
 
-main().catch((err) => {
+// ---------------------------------------------------------------- solver (needs `run.py --serve`)
+const api = {
+  status: () => fetch("/api/status", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+  solve: (cases) => fetch("/api/solve", { method: "POST", body: JSON.stringify({ cases }) }).then((r) => r.json()),
+  cancel: () => fetch("/api/cancel", { method: "POST", body: "{}" }).then((r) => r.json()),
+};
+
+const fmtAgo = (iso) => {
+  if (!iso) return "unknown time";
+  const d = new Date(iso), s = (Date.now() - d) / 1000;
+  if (s < 90) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+};
+
+/** Wires the Run selected / Run all buttons. When a solve finishes the page reloads on the same
+ * run, tab and time so the new results show. */
+async function initSolver(ctx) {
+  const st0 = await api.status();
+  const btnSel = $("btn-solve-sel"), btnAll = $("btn-solve-all"), btnCancel = $("btn-cancel");
+  const status = $("solver-status");
+  const idle = () => (status.textContent = `Results from ${fmtAgo(ctx.solvedAt ?? st0?.data_mtime)}`);
+  if (!st0) {
+    btnSel.disabled = btnAll.disabled = true;
+    status.innerHTML = `Static mode: start with <code>run.py --serve</code> to solve`;
+    return;
+  }
+  let version = st0.version, timer = null;
+
+  /** Mark each run row: queued / active (being planned or simulated) / done, or clear it. */
+  function markRows(st) {
+    const queue = st.running ? (st.cases ?? ctx.runs.map((r) => r.name)) : [];
+    const p = st.progress;
+    const cur = p?.stage === "sim" ? queue.indexOf(p.label) : p?.stage === "done" ? queue.length : -1; // -1: still planning
+    for (const r of ctx.runs) {
+      const k = queue.indexOf(r.name);
+      let state = null, text = "";
+      if (k >= 0 && cur >= 0 && k < cur) [state, text] = ["done", "Updated"];
+      else if (k >= 0 && k === cur) [state, text] = ["active", "Simulating…"];
+      else if (k >= 0 && cur < 0 && p?.stage === "plan") [state, text] = ["active", `${p.label}…`];
+      else if (k >= 0) [state, text] = ["queued", p ? "Queued" : "Starting…"];
+      for (const el of [r.el, r.name === ctx.selectedName() ? $("active-case") : null]) {
+        if (!el) continue; // the selected run is also shown in the "Active simulation" card
+        if (state) el.dataset.solve = state; else delete el.dataset.solve;
+        el.querySelector(".run-status").textContent = text;
+      }
+    }
+  }
+
+  function show(st) {
+    const running = st.running;
+    btnSel.disabled = btnAll.disabled = running;
+    btnSel.hidden = btnAll.hidden = running; // header shows only Cancel while solving
+    btnCancel.hidden = !running;
+    markRows(st);
+    if (running) {
+      const p = st.progress;
+      status.textContent = p ? `Solving ${p.done + 1}/${p.total}` : "Starting solver…";
+      status.classList.remove("err");
+    } else if (st.error) {
+      status.textContent = st.error === "cancelled" ? "Solve cancelled" : `Solve failed: ${st.error}`;
+      status.classList.toggle("err", st.error !== "cancelled");
+    } else idle();
+  }
+
+  async function poll() {
+    const st = await api.status();
+    if (!st) return;
+    show(st);
+    if (st.running) { timer = setTimeout(poll, 400); return; }
+    timer = null;
+    if (st.version !== version && !st.error) {
+      const q = new URLSearchParams(location.search);
+      q.set("case", ctx.selectedIndex() + 1);
+      q.set("t", ctx.time().toFixed(2));
+      q.set("tab", ctx.tab());
+      q.set("paused", "1");
+      location.search = q.toString();
+    }
+  }
+  async function start(cases) {
+    const r = await api.solve(cases);
+    if (r.error) { status.textContent = r.error; return; }
+    show(r);
+    if (!timer) poll();
+  }
+  btnSel.onclick = () => start([ctx.selectedName()]);
+  btnAll.onclick = () => start(null);
+  btnCancel.onclick = () => api.cancel();
+  show(st0);
+  if (st0.running) poll();
+  setInterval(() => !timer && !btnSel.disabled && idle(), 30000);
+}
+
+main().catch(async (err) => {
   console.error(err);
   const el = $("error");
   el.hidden = false;
   el.textContent = String(err.message || err);
+  if (await api.status()) { // served by run.py but no results yet: offer to solve
+    const b = document.createElement("button");
+    b.className = "btn primary";
+    b.textContent = "Run all";
+    b.onclick = async () => {
+      b.disabled = true;
+      await api.solve(null);
+      const wait = async () => { const st = await api.status(); st.running ? (b.textContent = st.progress ? `Solving ${st.progress.done + 1}/${st.progress.total}…` : "Starting…", setTimeout(wait, 500)) : location.reload(); };
+      wait();
+    };
+    el.append(document.createElement("br"), b);
+  }
 });

@@ -3,7 +3,7 @@ import * as THREE from "three";
 const DEG = Math.PI / 180;
 const DOWN = new THREE.Vector3(0, -1, 0);
 
-function textSprite(text, color = "#7d8a99") {
+function textSprite(text, color = "#a3acb8") {
   const c = document.createElement("canvas");
   c.width = 128; c.height = 64;
   const g = c.getContext("2d");
@@ -99,9 +99,9 @@ export class GimbalView {
 
     // pitch / yaw direction labels on the plate
     const lx = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.66, 0), new THREE.Vector3(2.0, 0.66, 0)]),
-      new THREE.LineBasicMaterial({ color: "#7d8a99" }));
+      new THREE.LineBasicMaterial({ color: "#a3acb8" }));
     const lz = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.66, 0), new THREE.Vector3(0, 0.66, 2.0)]),
-      new THREE.LineBasicMaterial({ color: "#7d8a99" }));
+      new THREE.LineBasicMaterial({ color: "#a3acb8" }));
     scene.add(lx, lz);
     const tp = textSprite("+P"); tp.position.set(2.45, 0.7, 0); scene.add(tp);
     const ty = textSprite("+Y"); ty.position.set(0, 0.7, 2.45); scene.add(ty);
@@ -192,7 +192,7 @@ export class GimbalTarget {
     g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
 
     g.font = "600 9px JetBrains Mono, monospace";
-    g.fillStyle = "#7d8a99";
+    g.fillStyle = "#a3acb8";
     g.textAlign = "left";
     g.fillText("+P", cx + R + 1, cy - 3);
     g.textAlign = "center";

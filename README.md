@@ -14,15 +14,23 @@
 
 ```bash
 uv sync
-uv run python run.py --serve        # plan + simulate + open the viewer at http://127.0.0.1:8000
-uv run pytest                       # spec §8 acceptance tests
+uv run python run.py --serve        # open the viewer on the stored results (no solve) at http://127.0.0.1:8000
+uv run python run.py                # solve all cases from the command line
+uv run python run.py --only "SCvx drag · atmosphere · MPC"   # re-solve one case, merged into the results
+uv run pytest                       # acceptance tests
 ```
 
-Scenarios: `coast_landing.json` (default — engine-off fall from 4 km, then hoverslam) and `spec_test_case.json`
-(the spec §7 case: engine already lit at 1.5 km, used by the acceptance tests). `run.py <scenario.json>` runs any scenario. Results go to `web/data/results.json`. Open them with
-`--serve`, or serve `web/` yourself (ES modules don't load over `file://`).
-The viewer flies one *selected* case at a time (click a case or press 1–9); "Compare" overlays the others.
-Deep links: `index.html?case=6&t=9.5&chase=0&compare=1&paused=1`.
+In the viewer, **Run selected** re-plans and re-simulates the selected run and **Run all** does every case.
+Both re-read the scenario config, run the solve in a separate process with live progress, save to
+`web/data/results.json` and reload the page on the same run. Re-opening the app shows the last stored
+results. Each run stores the plan it flew, so partial re-runs stay consistent. Solving needs `--serve`;
+serving `web/` any other way gives a read-only viewer (ES modules don't load over `file://`).
+
+Scenarios: `coast_landing.json` (default: engine-off fall from 4 km, then hoverslam) and `spec_test_case.json`
+(the spec §7 case: engine already lit at 1.5 km, used by the acceptance tests). Pass a scenario path to `run.py` to use another one.
+Click a run (or ↑/↓) to select it. **3D view** flies it; **Details** (key D) shows its configuration,
+touchdown state, guidance plan, control effort, time histories and every metric. "Compare all" overlays the other runs.
+Deep links: `index.html?case=6&t=9.5&chase=0&compare=1&paused=1&tab=details`.
 
 ## Layout
 
