@@ -14,17 +14,15 @@
 
 boosted-gnc is two things:
 
-1. **A simulation environment.** A fast, modular flight simulator written in Rust, covering vehicle dynamics,
+1. **A simulation environment.** A fast, light flight simulator written in Rust, covering vehicle dynamics,
    environment models and telemetry.
 2. **A library of modern flight control.** Minimal, readable implementations of state-of-the-art
-   optimization-based guidance and control for aircraft and rocket booster landing.
-
-The goal is to make advanced GNC methods easy to read, run and compare against a realistic model of the world.
+   sequential convex optimization-based guidance and control for aircraft and rocket booster landing.
 
 ## Highlights
 
-- 🦀 Fast, modular simulation engine written in Rust, with Python bindings
-- 🚀 Vehicle dynamics with 3D translation, pitch/yaw attitude, thrust vector control, grid fins and variable mass
+- 🦀 Fast simulation engine written in Rust, with Python bindings
+- 🚀 Vehicle dynamics including aerodynamics, thrust vector control and variable mass
 - 🌬️ Realistic environments: atmosphere, drag, wind shear and repeatable gusts
 - 📐 Convex optimization trajectory planning with G-FOLD and SCvx
 
