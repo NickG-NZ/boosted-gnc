@@ -8,6 +8,14 @@
   Convex optimization driven guidance, navigation and control for landing rockets and aircraft.
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.13%2B-3776AB?logo=python&logoColor=white" alt="Python 3.13+">
+  <img src="https://img.shields.io/badge/rust-2024%20edition-CE422B?logo=rust&logoColor=white" alt="Rust 2024 edition">
+  <img src="https://img.shields.io/badge/typescript-5.6-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5.6">
+  <img src="https://img.shields.io/badge/uv-managed-DE5FE9?logo=uv&logoColor=white" alt="uv">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
+</p>
+
 ---
 
 ## Overview
